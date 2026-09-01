@@ -70,6 +70,8 @@ def load_master_data():
       ]
       df = df.loc[:, df.columns != ""]
       df.columns = df.columns.astype(str).str.strip()
+      # Remove duplicate headers to avoid Series indexing issues
+      df = df.loc[:, ~df.columns.duplicated()]
       return df
     except Exception:
       continue
@@ -151,31 +153,31 @@ location_col = find_column(
 system_col = find_column(df, ["Sistem", "System", "Equipment"])
 
 
+# Helper function to extract safe string representation
+def safe_val(row, col_name):
+  if col_name and col_name in row and pd.notna(row[col_name]):
+    val = str(row[col_name]).strip()
+    return "" if val.upper() in ["NAN", "NONE", "NULL", "-"] else val
+  return ""
+
+
 # --- PIC AUTO-ASSIGNMENT ENGINE ---
 def get_final_pic(row):
   # 1. Use existing PIC from Master Data if present
-  if (
-      pic_col
-      and pd.notna(row.get(pic_col))
-      and str(row.get(pic_col)).strip() != ""
-  ):
-    val = str(row.get(pic_col)).strip().upper()
-    if val not in ["NAN", "NONE", "NULL", "-", ""]:
-      return val
+  existing_pic = safe_val(row, pic_col)
+  if existing_pic:
+    return existing_pic.upper()
 
-  # 2. Rule-based Assignment Logic (Hospital Shah Alam)
-  combined_text = (
-      f"{row.get(problem_col, '')} {row.get(location_col, '')}"
-      f" {row.get(system_col, '')}"
-  ).upper()
+  # 2. Extract safe context string
+  p_text = safe_val(row, problem_col)
+  l_text = safe_val(row, location_col)
+  s_text = safe_val(row, system_col)
+  combined_text = f"{p_text} {l_text} {s_text}".upper()
 
   # System/Equipment & Category Rules
   system_rules = [
-      # All Transportation / Vehicles -> NAZRAN
       (
-          (
-              r"\b(TRANSPORT|TRANSPORTATION|KENDERAAN|AMBULANCE|AMBULANS|SEDAN|BUS|BAS|VAN|CAR|KERETA|PEMANDU|DRIVER|LOGISTIK|STACKER|HYDROPOOL|FORKLIFT|HANDJACK)\b"
-          ),
+          r"\b(TRANSPORT|TRANSPORTATION|KENDERAAN|AMBULANCE|AMBULANS|SEDAN|BUS|BAS|VAN|CAR|KERETA|PEMANDU|DRIVER|LOGISTIK|STACKER|HYDROPOOL|FORKLIFT|HANDJACK)\b",
           "NAZRAN",
       ),
       (r"\b(CHILLER|COOLING TOWER)\b", "IMRAN"),
@@ -185,7 +187,10 @@ def get_final_pic(row):
       (r"\b(LIFT|ELEVATOR)\b", "SYAZWAN"),
       (r"\b(AGSS|AIR COMPRESSOR|MANIFOLD|TERMINAL UNIT)\b", "HAIKAL"),
       (r"\b(AVSU|AVSUM|PENDANT|REPEATER ALARM)\b", "BUKHARI"),
-      (r"\b(FIRE|SMOKE|SPRINKLER|HYDRANT|HOSE REEL|PYROGEN)\b", "AZMI & SYAZWAN"),
+      (
+          r"\b(FIRE|SMOKE|SPRINKLER|HYDRANT|HOSE REEL|PYROGEN)\b",
+          "AZMI & SYAZWAN",
+      ),
   ]
 
   for pattern, pic in system_rules:
@@ -195,31 +200,20 @@ def get_final_pic(row):
   # Location Rules
   location_rules = [
       (
-          (
-              r"\b(ARAS\s*0?1\b|LEVEL\s*0?1\b|\bl0?1\b|MAIN BLOCK LEVEL 1|MAIN"
-              r" BLOCK ARAS 1|BLOK UTAMA LEVEL 1|BLOK UTAMA ARAS 1|ARAS G|LEVEL"
-              r" G|LOBI|HASIL|PENDAFTARAN|KAUNTER)\b"
-          ),
+          r"\b(ARAS\s*0?1\b|LEVEL\s*0?1\b|\bl0?1\b|MAIN BLOCK LEVEL 1|MAIN BLOCK ARAS 1|BLOK UTAMA LEVEL 1|BLOK UTAMA ARAS 1|ARAS G|LEVEL G|LOBI|HASIL|PENDAFTARAN|KAUNTER)\b",
           "AMIR & SHARY",
       ),
       (r"\b(ARAS\s*0?2\b|LEVEL\s*0?2\b|\bl0?2\b|PENYELIDIKAN)\b", "FAIZUL"),
       (
-          (
-              r"\b(ARAS\s*0?3\b|LEVEL\s*0?3\b|\bl0?3\b|WAD\s*3|KECEMASAN|XRAY|X-RAY|RADIOLOGI|MOW|MDW)\b"
-          ),
+          r"\b(ARAS\s*0?3\b|LEVEL\s*0?3\b|\bl0?3\b|WAD\s*3|KECEMASAN|XRAY|X-RAY|RADIOLOGI|MOW|MDW)\b",
           "IMRAN",
       ),
       (
-          (
-              r"\b(ARAS\s*0?4\b|LEVEL\s*0?4\b|\bl0?4\b|WAD\s*4|MOT|PAC|NICU|CCU|ANAESTHESIA)\b"
-          ),
+          r"\b(ARAS\s*0?4\b|LEVEL\s*0?4\b|\bl0?4\b|WAD\s*4|MOT|PAC|NICU|CCU|ANAESTHESIA)\b",
           "MASLIZA",
       ),
       (
-          (
-              r"\b(ARAS\s*0?5\b|LEVEL\s*0?5\b|\bl0?5\b|ICU|DAYCARE|RAWATAN"
-              r" HARIAN)\b"
-          ),
+          r"\b(ARAS\s*0?5\b|LEVEL\s*0?5\b|\bl0?5\b|ICU|DAYCARE|RAWATAN HARIAN)\b",
           "SHAKIR",
       ),
       (
@@ -228,9 +222,7 @@ def get_final_pic(row):
       ),
       (r"\b(ARAS\s*0?7\b|LEVEL\s*0?7\b|\bl0?7\b|CSSD|RHU)\b", "FARHAN"),
       (
-          (
-              r"\b(ARAS\s*0?8\b|LEVEL\s*0?8\b|\bl0?8\b|WAD\s*8|8A|8B|LDU|BERSALIN|O&G|OBSTETRIK|GINEKOLOGI)\b"
-          ),
+          r"\b(ARAS\s*0?8\b|LEVEL\s*0?8\b|\bl0?8\b|WAD\s*8|8A|8B|LDU|BERSALIN|O&G|OBSTETRIK|GINEKOLOGI)\b",
           "MASLIZA",
       ),
       (r"\b(ARAS\s*0?9\b|LEVEL\s*0?9\b|\bl0?9\b|WAD\s*9|9A|9B)\b", "AZIZI"),
@@ -240,23 +232,16 @@ def get_final_pic(row):
           "AZIZI",
       ),
       (
-          (
-              r"\b(ARAS\s*12\b|LEVEL\s*12\b|\bl12\b|WAD\s*12|12A|12B|PEDIATRIK|PATOLOGI)\b"
-          ),
+          r"\b(ARAS\s*12\b|LEVEL\s*12\b|\bl12\b|WAD\s*12|12A|12B|PEDIATRIK|PATOLOGI)\b",
           "FAIZUL",
       ),
       (
-          (
-              r"\b(ARAS\s*13\b|LEVEL\s*13\b|\bl13\b|WAD\s*13|13A|13B|VIP|EKSEKUTIF|EKESEKUTIF)\b"
-          ),
+          r"\b(ARAS\s*13\b|LEVEL\s*13\b|\bl13\b|WAD\s*13|13A|13B|VIP|EKSEKUTIF|EKESEKUTIF)\b",
           "SHAKIR",
       ),
       (r"\b(ARAS\s*14\b|LEVEL\s*14\b|\bl14\b)\b", "SYAZWAN"),
       (
-          (
-              r"\b(PAKAR|KLINIK|OFTALMOLOGI|PERGIGIAN|ORL|SC|SPECIALIST"
-              r" CLINIC)\b"
-          ),
+          r"\b(PAKAR|KLINIK|OFTALMOLOGI|PERGIGIAN|ORL|SC|SPECIALIST CLINIC)\b",
           "FAIZ",
       ),
       (r"\b(KUARTERS|ASRAMA|HOUSEMAN|HOUSEMEN)\b", "SHAKIR"),
@@ -274,7 +259,7 @@ def get_final_pic(row):
 # Apply PIC Assignment
 df["Assigned_PIC"] = df.apply(get_final_pic, axis=1)
 
-# Build Display Column List (Guarantees WI No column is shown first)
+# Target Columns Ordering
 target_cols = [
     wi_no_col,
     type_col,
@@ -285,7 +270,6 @@ target_cols = [
 ]
 display_cols = [c for c in target_cols if c and c in df.columns]
 
-# Fallback: If WI No column wasn't automatically identified, include all original columns plus Assigned_PIC
 if not display_cols:
   display_cols = df.columns.tolist()
 
@@ -295,7 +279,7 @@ if date_col:
   df["Year"] = df["Parsed_Date"].dt.year
   df["Month_Name"] = df["Parsed_Date"].dt.strftime("%B")
 
-# Status Colors
+# Status Colors Mapping
 COLOR_MAP = {
     "Open": "#E53E3E",
     "OPEN": "#E53E3E",
@@ -374,9 +358,7 @@ if problem_col:
 # Categorize Work Types
 if type_col:
   type_clean = df[type_col].astype(str).str.upper().str.strip()
-  ppm_mask = type_clean.str.contains(
-      r"PPM|\bPM\b|PREVENT|PLANNED", regex=True
-  )
+  ppm_mask = type_clean.str.contains(r"PPM|\bPM\b|PREVENT|PLANNED", regex=True)
   breakdown_mask = type_clean.str.contains(
       r"BREAKDOWN|\bBD\b|EMERGENCY", regex=True
   )

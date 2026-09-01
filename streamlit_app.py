@@ -11,10 +11,7 @@ st.set_page_config(page_title="Mechanical Maintenance Hub", layout="wide")
 st.title("🔧 Mechanical Facility Maintenance Dashboard")
 
 # --- GOOGLE SHEET CSV URLS ---
-# Master Data Sheet URL
 SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/1wO7tjlpFIbqVN2HVhDV9wem7KGO0rjIh_J-9vSdYgiY/gviz/tq?tqx=out:csv"
-
-# List Asset 2026 Sheet URL (Update `gid=XXXXXX` with the specific tab ID if in the same spreadsheet)
 ASSET_2026_CSV_URL = "https://docs.google.com/spreadsheets/d/1wO7tjlpFIbqVN2HVhDV9wem7KGO0rjIh_J-9vSdYgiY/gviz/tq?tqx=out:csv&gid=123456789"
 
 @st.cache_data(ttl=15)
@@ -49,38 +46,30 @@ def fetch_csv_data(url):
 
 @st.cache_data(ttl=15)
 def load_and_merge_data():
-    # Load Master Data
     df_master = fetch_csv_data(SHEET_CSV_URL)
     
-    # Load List Asset 2026 Data
     try:
         df_asset_2026 = fetch_csv_data(ASSET_2026_CSV_URL)
     except Exception:
         df_asset_2026 = pd.DataFrame()
 
-    # --- FLEXIBLE COLUMN DETECTION ---
     def find_col(df, candidates):
         for col in df.columns:
             if col.strip().lower() in [c.lower() for c in candidates]:
                 return col
         return None
 
-    # Detect Asset Number and Location columns in Master Data
     master_asset_col = find_col(df_master, ['Asset No', 'Asset Number', 'Asset_No', 'No Asset', 'Asset ID', 'Asset'])
     master_loc_col = find_col(df_master, ['Aras', 'Location', 'Jabatan', 'Level', 'Floor', 'Blok', 'Lokasi'])
 
-    # Detect Asset Number and Location columns in Asset 2026 Data
     asset_asset_col = find_col(df_asset_2026, ['Asset No', 'Asset Number', 'Asset_No', 'No Asset', 'Asset ID', 'Asset'])
     asset_loc_col = find_col(df_asset_2026, ['Aras', 'Location', 'Jabatan', 'Level', 'Floor', 'Blok', 'Lokasi'])
 
-    # If Location column doesn't exist in Master Data, initialize it
     if not master_loc_col:
         df_master['Location'] = ''
         master_loc_col = 'Location'
 
-    # Map missing locations from List Asset 2026 into Master Data via Asset Number
     if master_asset_col and asset_asset_col and asset_loc_col and not df_asset_2026.empty:
-        # Create a lookup dictionary: { Asset Number: Location }
         asset_map = (
             df_asset_2026.dropna(subset=[asset_asset_col])
             .drop_duplicates(subset=[asset_asset_col], keep='first')
@@ -89,7 +78,6 @@ def load_and_merge_data():
             .to_dict()
         )
         
-        # Replace empty strings/nan values with NaN for filling
         df_master[master_loc_col] = (
             df_master[master_loc_col]
             .astype(str)
@@ -97,12 +85,10 @@ def load_and_merge_data():
             .replace(['nan', 'None', 'NaN', ''], None)
         )
         
-        # Fill missing location values using mapped Asset Number
         df_master[master_loc_col] = df_master[master_loc_col].fillna(
             df_master[master_asset_col].astype(str).str.strip().map(asset_map)
         )
         
-        # Clean up remaining Nones back to empty strings
         df_master[master_loc_col] = df_master[master_loc_col].fillna('')
 
     return df_master
@@ -140,6 +126,7 @@ def find_column(df, candidates):
             return col
     return None
 
+wi_no_col = find_column(df, ['WI No', 'WI Number', 'WO No', 'WO Number', 'Work Instruction', 'WI_No', 'ID', 'No WI'])
 type_col = find_column(df, ['Work Type', 'WorkType', 'Type', 'Category', 'Work_Type'])
 status_col = find_column(df, ['WI Status', 'Status', 'WIStatus', 'State'])
 pic_col = find_column(df, ['PIC Name', 'PIC', 'Assigned To', 'Technician', 'PIC_Name', 'Person In Charge'])
@@ -155,7 +142,6 @@ def auto_assign_pic(row):
     
     text_to_scan = f"{row.get(problem_col, '')} {row.get(location_col, '')} {row.get(system_col, '')}".lower()
     
-    # 1. Equipment & System Keyword Matching
     if re.search(r'\b(chiller|cooling tower)\b', text_to_scan):
         return "IMRAN"
     if re.search(r'\b(autoclave)\b', text_to_scan):
@@ -177,7 +163,6 @@ def auto_assign_pic(row):
     if re.search(r'\b(stacker|ambulance|sedan|rehab)\b', text_to_scan):
         return "NAZRAN"
         
-    # 2. Specialist Clinic & Non-Mainblock / Outside Areas
     if re.search(r'\b(pakar|klinik|oftalmologi|pergigian|orl|sc|specialist clinic|special clinic)\b', text_to_scan):
         return "FAIZ"
         
@@ -187,7 +172,6 @@ def auto_assign_pic(row):
     if re.search(r'\b(awsb|plant room|external|luar main block|luar)\b', text_to_scan):
         return "AZIZI"
 
-    # 3. Main Block Floor Levels (Strictly L1 through L14)
     if re.search(r'\b(aras\s*0?1\b|level\s*0?1\b|\bl0?1\b|main block level 1|main block aras 1|blok utama level 1|blok utama aras 1|aras g|level g|lobi|hasil|pendaftaran|kaunter)\b', text_to_scan):
         return "AMIR & SHARY"
         
@@ -230,7 +214,6 @@ def auto_assign_pic(row):
     if re.search(r'\b(aras\s*14\b|level\s*14\b|\bl14\b)\b', text_to_scan):
         return "SYAZWAN"
 
-    # Catch-all for non-floor locations or unspecified details
     if re.search(r'\b(rekod|perpustakaan|dietetik|sajian|pemandu|logistik|it)\b', text_to_scan):
         return "NAZRAN"
 
@@ -238,6 +221,16 @@ def auto_assign_pic(row):
 
 # Create or Update Auto-Assigned PIC Column
 df['Assigned_PIC'] = df.apply(auto_assign_pic, axis=1)
+
+# --- STRICT 5-COLUMN DASHBOARD DISPLAY SETTING ---
+target_display_cols = []
+if wi_no_col: target_display_cols.append(wi_no_col)
+if status_col: target_display_cols.append(status_col)
+if problem_col: target_display_cols.append(problem_col)
+if date_col: target_display_cols.append(date_col)
+target_display_cols.append('Assigned_PIC')
+
+display_cols = [c for c in target_display_cols if c in df.columns]
 
 # --- DATE PARSING ---
 if date_col:
@@ -290,8 +283,6 @@ if type_col:
     cm_data = df[cm_mask]
 else:
     ppm_data, breakdown_data, cm_data = pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
-
-display_cols = [c for c in df.columns if c not in ['Parsed_Date', 'Year', 'Month_Name'] and not str(c).startswith('Unnamed:')]
 
 # --- PAGE 1: MAIN OVERVIEW ---
 if page == "Main Overview (All Work Types)":

@@ -97,40 +97,60 @@ def auto_assign_pic(row):
     if re.search(r'\b(stacker|ambulance|sedan|rehab)\b', text_to_scan):
         return "NAZRAN"
         
-    # 2. Location & Floor Level Matching
+    # 2. Specialist Clinic & Non-Mainblock / Outside Areas
     if re.search(r'\b(pakar|klinik|oftalmologi|pergigian|orl|sc|specialist clinic|special clinic)\b', text_to_scan):
         return "FAIZ"
         
-    if re.search(r'\b(aras\s*10|level\s*10|\bl10\b|wad\s*10|10a|10b)\b', text_to_scan):
-        return "SHARY"
+    if re.search(r'\b(kuarters|asrama|houseman|housemen)\b', text_to_scan):
+        return "SHAKIR"
+
+    if re.search(r'\b(awsb|plant room|external|luar main block|luar)\b', text_to_scan):
+        return "AZIZI"
+
+    # 3. Main Block Floor Levels (Strictly L1 through L14)
+    if re.search(r'\b(aras\s*0?1\b|level\s*0?1\b|\bl0?1\b|main block level 1|main block aras 1|blok utama level 1|blok utama aras 1|aras g|level g|lobi|hasil|pendaftaran|kaunter)\b', text_to_scan):
+        return "AMIR & SHARY"
         
-    if re.search(r'\b(aras\s*(0?2|12)|level\s*(0?2|12)|\bl0?2\b|\bl12\b|wad\s*12|12a|12b|pediatrik|patologi|penyelidikan)\b', text_to_scan):
+    if re.search(r'\b(aras\s*0?2\b|level\s*0?2\b|\bl0?2\b|penyelidikan)\b', text_to_scan):
         return "FAIZUL"
         
-    if re.search(r'\b(aras\s*(0?5|13)|level\s*(0?5|13)|\bl0?5\b|\bl13\b|icu|daycare|rawatan harian|wad\s*13|13a|13b|kuarters|asrama|houseman|housemen|vip|eksekutif|ekesekutif)\b', text_to_scan):
-        return "SHAKIR"
-        
-    if re.search(r'\b(aras\s*14|level\s*14|\bl14\b)\b', text_to_scan):
-        return "SYAZWAN"
-        
-    if re.search(r'\b(aras\s*(0?9|11)|level\s*(0?9|11)|\bl0?9\b|\bl11\b|wad\s*9|9a|9b|wad\s*11|11a|11b|ortopedik|plant room|awsb)\b', text_to_scan):
-        return "AZIZI"
-        
-    if re.search(r'\b(aras\s*(0?6|0?7)|level\s*(0?6|0?7)|\bl0?6\b|\bl0?7\b|hdw|got|dewan bedah|cssd|rhu)\b', text_to_scan):
-        return "FARHAN"
-        
-    if re.search(r'\b(aras\s*(0?4|0?8)|level\s*(0?4|0?8)|\bl0?4\b|\bl0?8\b|wad\s*4|wad\s*8|8a|8b|mot|pac|nicu|ccu|anaesthesia|ldu|bersalin|o&g|obstetrik|ginekologi)\b', text_to_scan):
-        return "MASLIZA"
-        
-    if re.search(r'\b(aras\s*0?3|level\s*0?3|\bl0?3\b|wad\s*3|kecemasan|xray|x-ray|radiologi|mow|mdw)\b', text_to_scan):
+    if re.search(r'\b(aras\s*0?3\b|level\s*0?3\b|\bl0?3\b|wad\s*3|kecemasan|xray|x-ray|radiologi|mow|mdw)\b', text_to_scan):
         return "IMRAN"
         
-    if re.search(r'\b(aras\s*0?1|level\s*0?1|\bl0?1\b|main block level 1|main block aras 1|blok utama level 1|blok utama aras 1)\b', text_to_scan):
-        return "AMIR & SHARY"
+    if re.search(r'\b(aras\s*0?4\b|level\s*0?4\b|\bl0?4\b|wad\s*4|mot|pac|nicu|ccu|anaesthesia)\b', text_to_scan):
+        return "MASLIZA"
         
-    if re.search(r'\b(aras\s*g|level\s*g|lobi|hasil|pendaftaran|kaunter)\b', text_to_scan):
-        return "AMIR & SHARY"
+    if re.search(r'\b(aras\s*0?5\b|level\s*0?5\b|\bl0?5\b|icu|daycare|rawatan harian)\b', text_to_scan):
+        return "SHAKIR"
         
+    if re.search(r'\b(aras\s*0?6\b|level\s*0?6\b|\bl0?6\b|hdw|got|dewan bedah)\b', text_to_scan):
+        return "FARHAN"
+        
+    if re.search(r'\b(aras\s*0?7\b|level\s*0?7\b|\bl0?7\b|cssd|rhu)\b', text_to_scan):
+        return "FARHAN"
+        
+    if re.search(r'\b(aras\s*0?8\b|level\s*0?8\b|\bl0?8\b|wad\s*8|8a|8b|ldu|bersalin|o&g|obstetrik|ginekologi)\b', text_to_scan):
+        return "MASLIZA"
+        
+    if re.search(r'\b(aras\s*0?9\b|level\s*0?9\b|\bl0?9\b|wad\s*9|9a|9b)\b', text_to_scan):
+        return "AZIZI"
+        
+    if re.search(r'\b(aras\s*10\b|level\s*10\b|\bl10\b|wad\s*10|10a|10b)\b', text_to_scan):
+        return "SHARY"
+        
+    if re.search(r'\b(aras\s*11\b|level\s*11\b|\bl11\b|wad\s*11|11a|11b|ortopedik)\b', text_to_scan):
+        return "AZIZI"
+        
+    if re.search(r'\b(aras\s*12\b|level\s*12\b|\bl12\b|wad\s*12|12a|12b|pediatrik|patologi)\b', text_to_scan):
+        return "FAIZUL"
+        
+    if re.search(r'\b(aras\s*13\b|level\s*13\b|\bl13\b|wad\s*13|13a|13b|vip|eksekutif|ekesekutif)\b', text_to_scan):
+        return "SHAKIR"
+        
+    if re.search(r'\b(aras\s*14\b|level\s*14\b|\bl14\b)\b', text_to_scan):
+        return "SYAZWAN"
+
+    # Catch-all for non-floor locations or unspecified details
     if re.search(r'\b(rekod|perpustakaan|dietetik|sajian|pemandu|logistik|it)\b', text_to_scan):
         return "NAZRAN"
 
@@ -271,33 +291,38 @@ elif page == "🔍 PIC Roster Directory":
     st.subheader("📋 Hospital Shah Alam - Mechanical Team Official Duty Directory")
     
     roster_data = [
-        {"Category": "System/Equipment", "Scope / Keywords": "Chiller, Cooling Tower", "PIC In-Charge": "IMRAN"},
-        {"Category": "System/Equipment", "Scope / Keywords": "Autoclave", "PIC In-Charge": "AMIR"},
-        {"Category": "System/Equipment", "Scope / Keywords": "Hydropool", "PIC In-Charge": "NAZRAN"},
-        {"Category": "System/Equipment", "Scope / Keywords": "Pneumatic Tube (PTS)", "PIC In-Charge": "FARHAN"},
-        {"Category": "System/Equipment", "Scope / Keywords": "Pump, Liquid Petroleum Gas (LPG)", "PIC In-Charge": "HASLA"},
-        {"Category": "System/Equipment", "Scope / Keywords": "Lifts, Forklift, Handjack, Bus", "PIC In-Charge": "SYAZWAN"},
-        {"Category": "System/Equipment", "Scope / Keywords": "Medical Gas (AGSS, Air Compressor, Manifold, Terminal Unit)", "PIC In-Charge": "HAIKAL"},
-        {"Category": "System/Equipment", "Scope / Keywords": "Medical Gas (AVSU, AVSUM, Pendant, Repeater Alarm)", "PIC In-Charge": "BUKHARI"},
-        {"Category": "System/Equipment", "Scope / Keywords": "Fire System (Smoke Detector, Hose Reel, Alarm, Hydrant)", "PIC In-Charge": "AZMI & SYAZWAN"},
-        {"Category": "System/Equipment", "Scope / Keywords": "Stacker, Ambulances, Sedan Car", "PIC In-Charge": "NAZRAN"},
-        {"Category": "Floor / Area", "Scope / Keywords": "Main Block Level 1 / Aras 1 / L1 / L01 (Blok Utama)", "PIC In-Charge": "AMIR & SHARY"},
-        {"Category": "Floor / Area", "Scope / Keywords": "Blok Pakar, Specialist Clinics & SC (Oftalmologi, Pediatrik, Pergigian, etc.)", "PIC In-Charge": "FAIZ"},
-        {"Category": "Floor / Area", "Scope / Keywords": "Aras G (Main Lobby, Registration, Kaunter Hasil)", "PIC In-Charge": "AMIR & SHARY"},
-        {"Category": "Floor / Area", "Scope / Keywords": "Aras 2 / L2 (Penyelidikan), Aras 12 / L12 (Wad Pediatrik, 12A, 12B, Patologi)", "PIC In-Charge": "FAIZUL"},
-        {"Category": "Floor / Area", "Scope / Keywords": "Aras 3 / L3 (Emergency & Trauma, X-Ray, MOW, MDW, Radiologi, Wad 3 - All L3)", "PIC In-Charge": "IMRAN"},
-        {"Category": "Floor / Area", "Scope / Keywords": "Aras 4 / L4 (MOT, PAC, NICU, CCU, Anaesthesia), Aras 8 / L8 (Wad O&G, 8A, 8B, LDU)", "PIC In-Charge": "MASLIZA"},
-        {"Category": "Floor / Area", "Scope / Keywords": "Aras 5 / L5 (ICU, Daycare), Aras 13 / L13 (Wad Executive/VIP, 13A, 13B), Kuarters, Asrama Housemen", "PIC In-Charge": "SHAKIR"},
-        {"Category": "Floor / Area", "Scope / Keywords": "Aras 6 / L6 (HDW, Dewan Bedah GOT), Aras 7 / L7 (CSSD, RHU)", "PIC In-Charge": "FARHAN"},
-        {"Category": "Floor / Area", "Scope / Keywords": "Aras 9 / L9 (Wad Pembedahan, 9A, 9B), Aras 11 / L11 (Wad Ortopedik, 11A, 11B), Aras 16 (AWSB), Aras 17 (Plant Room)", "PIC In-Charge": "AZIZI"},
-        {"Category": "Floor / Area", "Scope / Keywords": "Aras 10 / L10 (Wad Perubatan Lelaki 10A / Isolasi 10B)", "PIC In-Charge": "SHARY"},
-        {"Category": "Floor / Area", "Scope / Keywords": "Aras 14 / L14", "PIC In-Charge": "SYAZWAN"},
+        {"Category": "Main Block Level", "Scope / Floor Level": "Level 1 / Aras 1 / L1 (Include Aras G, Lobby)", "PIC In-Charge": "AMIR & SHARY"},
+        {"Category": "Main Block Level", "Scope / Floor Level": "Level 2 / Aras 2 / L2 (Penyelidikan)", "PIC In-Charge": "FAIZUL"},
+        {"Category": "Main Block Level", "Scope / Floor Level": "Level 3 / Aras 3 / L3 (Emergency, Radiologi, MOW, MDW, Wad 3 - All L3)", "PIC In-Charge": "IMRAN"},
+        {"Category": "Main Block Level", "Scope / Floor Level": "Level 4 / Aras 4 / L4 (MOT, PAC, NICU, CCU, Anaesthesia)", "PIC In-Charge": "MASLIZA"},
+        {"Category": "Main Block Level", "Scope / Floor Level": "Level 5 / Aras 5 / L5 (ICU, Daycare, Rawatan Harian)", "PIC In-Charge": "SHAKIR"},
+        {"Category": "Main Block Level", "Scope / Floor Level": "Level 6 / Aras 6 / L6 (HDW, Dewan Bedah GOT)", "PIC In-Charge": "FARHAN"},
+        {"Category": "Main Block Level", "Scope / Floor Level": "Level 7 / Aras 7 / L7 (CSSD, RHU)", "PIC In-Charge": "FARHAN"},
+        {"Category": "Main Block Level", "Scope / Floor Level": "Level 8 / Aras 8 / L8 (Wad O&G, 8A, 8B, LDU, Bersalin)", "PIC In-Charge": "MASLIZA"},
+        {"Category": "Main Block Level", "Scope / Floor Level": "Level 9 / Aras 9 / L9 (Wad Pembedahan, 9A, 9B)", "PIC In-Charge": "AZIZI"},
+        {"Category": "Main Block Level", "Scope / Floor Level": "Level 10 / Aras 10 / L10 (Wad Perubatan Lelaki 10A / Isolasi 10B)", "PIC In-Charge": "SHARY"},
+        {"Category": "Main Block Level", "Scope / Floor Level": "Level 11 / Aras 11 / L11 (Wad Ortopedik, 11A, 11B)", "PIC In-Charge": "AZIZI"},
+        {"Category": "Main Block Level", "Scope / Floor Level": "Level 12 / Aras 12 / L12 (Wad Pediatrik, 12A, 12B, Patologi)", "PIC In-Charge": "FAIZUL"},
+        {"Category": "Main Block Level", "Scope / Floor Level": "Level 13 / Aras 13 / L13 (Wad Executive/VIP, 13A, 13B)", "PIC In-Charge": "SHAKIR"},
+        {"Category": "Main Block Level", "Scope / Floor Level": "Level 14 / Aras 14 / L14", "PIC In-Charge": "SYAZWAN"},
+        {"Category": "Outside Main Block", "Scope / Floor Level": "Kuarters G, Asrama Housemen", "PIC In-Charge": "SHAKIR"},
+        {"Category": "Outside Main Block", "Scope / Floor Level": "Plant Room, AWSB, External Buildings", "PIC In-Charge": "AZIZI"},
+        {"Category": "Outside Main Block", "Scope / Floor Level": "Blok Pakar, Specialist Clinics (SC) - All Clinics", "PIC In-Charge": "FAIZ"},
+        {"Category": "System/Equipment", "Scope / Floor Level": "Chiller, Cooling Tower", "PIC In-Charge": "IMRAN"},
+        {"Category": "System/Equipment", "Scope / Floor Level": "Autoclave", "PIC In-Charge": "AMIR"},
+        {"Category": "System/Equipment", "Scope / Floor Level": "Hydropool, Stacker, Ambulances, Sedan", "PIC In-Charge": "NAZRAN"},
+        {"Category": "System/Equipment", "Scope / Floor Level": "Pneumatic Tube (PTS)", "PIC In-Charge": "FARHAN"},
+        {"Category": "System/Equipment", "Scope / Floor Level": "Pump, Liquid Petroleum Gas (LPG)", "PIC In-Charge": "HASLA"},
+        {"Category": "System/Equipment", "Scope / Floor Level": "Lifts, Forklift, Handjack, Bus", "PIC In-Charge": "SYAZWAN"},
+        {"Category": "System/Equipment", "Scope / Floor Level": "Medical Gas (AGSS, Air Compressor, Manifold, Terminal Unit)", "PIC In-Charge": "HAIKAL"},
+        {"Category": "System/Equipment", "Scope / Floor Level": "Medical Gas (AVSU, AVSUM, Pendant, Repeater Alarm)", "PIC In-Charge": "BUKHARI"},
+        {"Category": "System/Equipment", "Scope / Floor Level": "Fire System (Smoke Detector, Hose Reel, Alarm, Hydrant)", "PIC In-Charge": "AZMI & SYAZWAN"},
     ]
     
     roster_df = pd.DataFrame(roster_data)
     
     search_term = st.text_input("🔍 Quick Lookup (Type any problem, area, or equipment name):")
     if search_term.strip():
-        roster_df = roster_df[roster_df['Scope / Keywords'].str.contains(search_term, case=False, na=False)]
+        roster_df = roster_df[roster_df['Scope / Floor Level'].str.contains(search_term, case=False, na=False)]
         
     st.dataframe(roster_df, use_container_width=True)

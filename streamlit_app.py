@@ -68,7 +68,7 @@ problem_col = find_column(df, ['Problem Description', 'Problem', 'Description', 
 location_col = find_column(df, ['Aras', 'Location', 'Jabatan', 'Level', 'Floor', 'Blok'])
 system_col = find_column(df, ['Sistem', 'System', 'Equipment'])
 
-# --- AUTO PIC ASSIGNMENT LOGIC (REGEX BOUNDARIES TO PREVENT FALSE MATCHES) ---
+# --- AUTO PIC ASSIGNMENT LOGIC ---
 def auto_assign_pic(row):
     if pic_col and pd.notna(row.get(pic_col)) and str(row.get(pic_col)).strip() != "":
         return str(row.get(pic_col)).strip().upper()
@@ -97,11 +97,11 @@ def auto_assign_pic(row):
     if re.search(r'\b(stacker|ambulance|sedan|rehab)\b', text_to_scan):
         return "NAZRAN"
         
-    # 2. Location & Floor Level Matching (Strict Regex Word Boundaries)
+    # 2. Location & Floor Level Matching
     if re.search(r'\b(aras\s*10|level\s*10|wad\s*10|10a|10b)\b', text_to_scan):
         return "SHARY"
         
-    if re.search(r'\b(aras\s*12|level\s*12|wad\s*12|pediatrik|patologi|aras\s*2|level\s*2|penyelidikan)\b', text_to_scan):
+    if re.search(r'\b(aras\s*12|level\s*12|wad\s*12|12a|12b|pediatrik|patologi|aras\s*2|level\s*2|penyelidikan)\b', text_to_scan):
         return "FAIZUL"
         
     if re.search(r'\b(aras\s*13|level\s*13|aras\s*15|level\s*15|aras\s*5|level\s*5|icu|daycare|rawatan harian|kuarters|vip|eksekutif)\b', text_to_scan):
@@ -110,13 +110,13 @@ def auto_assign_pic(row):
     if re.search(r'\b(aras\s*14|level\s*14)\b', text_to_scan):
         return "SYAZWAN"
         
-    if re.search(r'\b(aras\s*9|level\s*9|aras\s*11|level\s*11|aras\s*16|level\s*16|aras\s*17|level\s*17|wad\s*9|wad\s*11|ortopedik|plant room|awsb)\b', text_to_scan):
+    if re.search(r'\b(aras\s*9|level\s*9|wad\s*9|9a|9b|aras\s*11|level\s*11|wad\s*11|11a|11b|ortopedik|plant room|awsb)\b', text_to_scan):
         return "AZIZI"
         
     if re.search(r'\b(aras\s*6|level\s*6|aras\s*7|level\s*7|hdw|got|dewan bedah|cssd|rhu)\b', text_to_scan):
         return "FARHAN"
         
-    if re.search(r'\b(aras\s*4|level\s*4|aras\s*8|level\s*8|mot|pac|nicu|ccu|anaesthesia|ldu|bersalin|o&g|obstetrik|ginekologi)\b', text_to_scan):
+    if re.search(r'\b(aras\s*4|level\s*4|wad\s*4|aras\s*8|level\s*8|wad\s*8|8a|8b|mot|pac|nicu|ccu|anaesthesia|ldu|bersalin|o&g|obstetrik|ginekologi)\b', text_to_scan):
         return "MASLIZA"
         
     if re.search(r'\b(aras\s*3|level\s*3|kecemasan|xray|x-ray|radiologi|mow)\b', text_to_scan):
@@ -283,13 +283,13 @@ elif page == "🔍 PIC Roster Directory":
         {"Category": "System/Equipment", "Scope / Keywords": "Stacker, Ambulances, Sedan Car", "PIC In-Charge": "NAZRAN"},
         {"Category": "Floor / Area", "Scope / Keywords": "Main Block Level 1 / Aras 1 (Blok Utama)", "PIC In-Charge": "AMIR & SHARY"},
         {"Category": "Floor / Area", "Scope / Keywords": "Blok Pakar & Specialist Clinics (Oftalmologi, Pediatrik, Pergigian, etc.)", "PIC In-Charge": "FAIZ"},
-        {"Category": "Floor / Area", "Scope / Keywords": "Aras 1 (Main Lobby, Registration, Kaunter Hasil)", "PIC In-Charge": "AMIR & SHARY"},
+        {"Category": "Floor / Area", "Scope / Keywords": "Aras G (Main Lobby, Registration, Kaunter Hasil)", "PIC In-Charge": "AMIR & SHARY"},
         {"Category": "Floor / Area", "Scope / Keywords": "Aras 2 (Penyelidikan & Kawalan Kualiti), Aras 12 (Wad Pediatrik)", "PIC In-Charge": "FAIZUL"},
-        {"Category": "Floor / Area", "Scope / Keywords": "Aras 3 (Emergency & Trauma, X-Ray, MDW)", "PIC In-Charge": "IMRAN"},
-        {"Category": "Floor / Area", "Scope / Keywords": "Aras 4 (MOT, PAC, NICU, CCU, Anaesthesia), Aras 8 (Wad O&G) (8A & 8B)", "PIC In-Charge": "MASLIZA"},
+        {"Category": "Floor / Area", "Scope / Keywords": "Aras 3 (Emergency & Trauma, X-Ray, MOW)", "PIC In-Charge": "IMRAN"},
+        {"Category": "Floor / Area", "Scope / Keywords": "Aras 4 (MOT, PAC, NICU, CCU, Anaesthesia), Aras 8 (Wad O&G, 8A, 8B)", "PIC In-Charge": "MASLIZA"},
         {"Category": "Floor / Area", "Scope / Keywords": "Aras 5 (ICU, Daycare), Aras 13 (Wad Executive/VIP), Aras 15 (Kuarters G)", "PIC In-Charge": "SHAKIR"},
         {"Category": "Floor / Area", "Scope / Keywords": "Aras 6 (HDW, Dewan Bedah GOT), Aras 7 (CSSD, RHU)", "PIC In-Charge": "FARHAN"},
-        {"Category": "Floor / Area", "Scope / Keywords": "Aras 9 (Wad Pembedahan), Aras 11 (Wad Ortopedik),(AWSB), (Plant Room)", "PIC In-Charge": "AZIZI"},
+        {"Category": "Floor / Area", "Scope / Keywords": "Aras 9 (Wad Pembedahan, 9A, 9B), Aras 11 (Wad Ortopedik), Aras 16 (AWSB), Aras 17 (Plant Room)", "PIC In-Charge": "AZIZI"},
         {"Category": "Floor / Area", "Scope / Keywords": "Aras 10 (Wad Perubatan Lelaki 10A / Isolasi 10B)", "PIC In-Charge": "SHARY"},
         {"Category": "Floor / Area", "Scope / Keywords": "Aras 14", "PIC In-Charge": "SYAZWAN"},
     ]

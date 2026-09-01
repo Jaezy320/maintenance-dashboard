@@ -5,7 +5,6 @@ import requests
 import io
 import re
 import csv
-import urllib.parse
 
 # --- PAGE CONFIGURATION ---
 st.set_page_config(
@@ -22,17 +21,11 @@ SPREADSHEET_ID = "1wO7tjlpFIbqVN2HVhDV9wem7KGO0rjIh_J-9vSdYgiY"
 BASE_URL = f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/gviz/tq?tqx=out:csv"
 
 @st.cache_data(ttl=15)
-def fetch_google_sheet_tab(sheet_name=None):
-    """Fetches a specific sheet tab as CSV from Google Sheets with fallback mechanisms."""
-    if sheet_name:
-        encoded_name = urllib.parse.quote(sheet_name)
-        url = f"{BASE_URL}&sheet={encoded_name}"
-    else:
-        url = BASE_URL
-
+def load_master_data():
+    """Fetches the main data sheet as CSV from Google Sheets with clean formatting."""
     headers = {"User-Agent": "Mozilla/5.0"}
     try:
-        response = requests.get(url, headers=headers, timeout=12)
+        response = requests.get(BASE_URL, headers=headers, timeout=12)
         response.raise_for_status()
         
         lines = response.text.splitlines()
@@ -59,66 +52,10 @@ def fetch_google_sheet_tab(sheet_name=None):
         df.columns = df.columns.astype(str).str.strip()
         return df
     except Exception as e:
-        st.error(f"Failed loading tab '{sheet_name or 'Main'}': {e}")
+        st.error(f"Failed loading Master Data from Google Sheets: {e}")
         return pd.DataFrame()
 
-@st.cache_data(ttl=15)
-def load_all_dataset():
-    # Attempt loading Master Data, Senarai Tempat (try multiple case variations), and Assets
-    df_master = fetch_google_sheet_tab(None)
-    
-    df_tempat = fetch_google_sheet_tab("senarai tempat")
-    if df_tempat.empty:
-        df_tempat = fetch_google_sheet_tab("Senarai Tempat")
-    if df_tempat.empty:
-        df_tempat = fetch_google_sheet_tab("SENARAI TEMPAT")
-        
-    df_asset = fetch_google_sheet_tab("list asset 2026")
-    if df_asset.empty:
-        df_asset = fetch_google_sheet_tab("List Asset 2026")
-
-    # Location lookup enrichment via Asset Number if missing
-    def find_col(df_in, candidates):
-        for col in df_in.columns:
-            if col.strip().lower() in [c.lower() for c in candidates]:
-                return col
-        return None
-
-    master_asset_col = find_col(df_master, ['Asset No', 'Asset Number', 'Asset_No', 'No Asset', 'Asset ID', 'Asset'])
-    master_loc_col = find_col(df_master, ['Aras', 'Location', 'Jabatan', 'Level', 'Floor', 'Blok', 'Lokasi', 'Tempat'])
-
-    asset_asset_col = find_col(df_asset, ['Asset No', 'Asset Number', 'Asset_No', 'No Asset', 'Asset ID', 'Asset'])
-    asset_loc_col = find_col(df_asset, ['Aras', 'Location', 'Jabatan', 'Level', 'Floor', 'Blok', 'Lokasi', 'Tempat'])
-
-    if master_loc_col is None:
-        df_master['Location'] = ''
-        master_loc_col = 'Location'
-
-    if master_asset_col and asset_asset_col and asset_loc_col and not df_asset.empty:
-        asset_map = (
-            df_asset.dropna(subset=[asset_asset_col])
-            .drop_duplicates(subset=[asset_asset_col], keep='first')
-            .set_index(asset_asset_col)[asset_loc_col]
-            .astype(str)
-            .to_dict()
-        )
-        
-        df_master[master_loc_col] = (
-            df_master[master_loc_col]
-            .astype(str)
-            .str.strip()
-            .replace(['nan', 'None', 'NaN', ''], None)
-        )
-        
-        df_master[master_loc_col] = df_master[master_loc_col].fillna(
-            df_master[master_asset_col].astype(str).str.strip().map(asset_map)
-        )
-        
-        df_master[master_loc_col] = df_master[master_loc_col].fillna('')
-
-    return df_master, df_tempat
-
-df, df_tempat = load_all_dataset()
+df = load_master_data()
 
 if df.empty:
     st.error("⚠️ Unable to retrieve Master Data. Please verify that the Google Sheet is set to 'Anyone with the link can view'.")
@@ -134,21 +71,26 @@ def find_column(df_in, candidates):
 wi_no_col = find_column(df, ['WI No', 'WI Number', 'WO No', 'WO Number', 'Work Instruction', 'WI_No', 'ID', 'No WI'])
 type_col = find_column(df, ['Work Type', 'WorkType', 'Type', 'Category', 'Work_Type'])
 status_col = find_column(df, ['WI Status', 'Status', 'WIStatus', 'State'])
-pic_col = find_column(df, ['PIC Name', 'PIC', 'Assigned To', 'Technician', 'PIC_Name', 'Person In Charge'])
+
+# Detect PIC List from Master Data
+pic_col = find_column(df, ['PIC List', 'PIC Name', 'PIC', 'Assigned To', 'Technician', 'PIC_Name', 'Person In Charge', 'Senarai PIC'])
+
 date_col = find_column(df, ['Date/Time Received', 'Date', 'Date Received', 'Created Date', 'Received Date'])
 problem_col = find_column(df, ['Problem Description', 'Problem', 'Description', 'Issue', 'Details'])
 location_col = find_column(df, ['Aras', 'Location', 'Jabatan', 'Level', 'Floor', 'Blok', 'Lokasi', 'Tempat'])
 system_col = find_column(df, ['Sistem', 'System', 'Equipment'])
 
-# --- ENHANCED PIC AUTO-ASSIGNMENT ENGINE ---
-def auto_assign_pic_enhanced(row):
-    # 1. Preserve explicit existing PIC if present
+# --- PIC ASSIGNMENT ENGINE ---
+def get_final_pic(row):
+    # 1. Directly use PIC from Master Data if populated
     if pic_col and pd.notna(row.get(pic_col)) and str(row.get(pic_col)).strip() != "":
-        return str(row.get(pic_col)).strip().upper()
+        val = str(row.get(pic_col)).strip().upper()
+        if val not in ["NAN", "NONE", "NULL", "-"]:
+            return val
 
+    # 2. Fallback Regex Logic (Only if Master Data PIC field is blank)
     combined_text = f"{row.get(problem_col, '')} {row.get(location_col, '')} {row.get(system_col, '')}".upper()
 
-    # 2. Equipment / Special Systems Rules
     system_rules = [
         (r'\b(CHILLER|COOLING TOWER)\b', "IMRAN"),
         (r'\b(AUTOCLAVE)\b', "AMIR"),
@@ -165,7 +107,6 @@ def auto_assign_pic_enhanced(row):
         if re.search(pattern, combined_text):
             return pic
 
-    # 3. Location / Department Duty Roster Mapping
     location_rules = [
         (r'\b(ARAS\s*0?1\b|LEVEL\s*0?1\b|\bl0?1\b|MAIN BLOCK LEVEL 1|MAIN BLOCK ARAS 1|BLOK UTAMA LEVEL 1|BLOK UTAMA ARAS 1|ARAS G|LEVEL G|LOBI|HASIL|PENDAFTARAN|KAUNTER)\b', "AMIR & SHARY"),
         (r'\b(ARAS\s*0?2\b|LEVEL\s*0?2\b|\bl0?2\b|PENYELIDIKAN)\b', "FAIZUL"),
@@ -193,12 +134,13 @@ def auto_assign_pic_enhanced(row):
 
     return "UNASSIGNED"
 
-# Apply Auto Assignment
-df['Assigned_PIC'] = df.apply(auto_assign_pic_enhanced, axis=1)
+# Apply Final PIC Column
+df['Assigned_PIC'] = df.apply(get_final_pic, axis=1)
 
-# Ensure display columns fallback if target columns aren't found
+# Ensure display columns fallback smoothly
 target_display_cols = []
 if wi_no_col: target_display_cols.append(wi_no_col)
+if type_col: target_display_cols.append(type_col)
 if status_col: target_display_cols.append(status_col)
 if problem_col: target_display_cols.append(problem_col)
 if date_col: target_display_cols.append(date_col)
@@ -232,8 +174,7 @@ st.sidebar.header("Navigation & Filters")
 page = st.sidebar.radio("Go to:", [
     "Main Overview (All Work Types)", 
     "PPM & PIC KPIs", 
-    "🔍 PIC Roster Directory", 
-    "📍 Location Reference (Senarai Tempat)"
+    "🔍 PIC Roster Directory"
 ])
 
 st.sidebar.markdown("---")
@@ -329,10 +270,10 @@ elif page == "PPM & PIC KPIs":
     st.sidebar.markdown("---")
     st.sidebar.subheader("👤 PIC Filters")
     
-    master_pics = ["AMIR", "AZIZI", "AZMI", "BUKHARI", "FAIZ", "FAIZUL", "FARHAN", 
-                   "HAIKAL", "HASLA", "IMRAN", "MASLIZA", "NAZRAN", "SHAKIR", "SHARY", "SYAZWAN"]
-
-    selected_pic = st.sidebar.selectbox("Filter by PIC:", ["All PICs"] + master_pics)
+    # Extract unique assigned PICs dynamically from data
+    unique_pics = sorted([p for p in df['Assigned_PIC'].dropna().unique().tolist() if p != "UNASSIGNED"])
+    
+    selected_pic = st.sidebar.selectbox("Filter by PIC:", ["All PICs"] + unique_pics)
     
     filtered_ppm = ppm_data
     if selected_pic != "All PICs":
@@ -405,19 +346,3 @@ elif page == "🔍 PIC Roster Directory":
         
     st.dataframe(roster_df, use_container_width=True)
     render_excel_download_button(roster_df, "Hospital_Shah_Alam_PIC_Roster.xlsx", "📥 Download PIC Roster as Excel")
-
-# --- PAGE 4: SENARAI TEMPAT DIRECTORY ---
-elif page == "📍 Location Reference (Senarai Tempat)":
-    st.subheader("📍 Location Directory (Senarai Tempat)")
-    
-    if df_tempat.empty:
-        st.warning("⚠️ Could not load the 'senarai tempat' tab directly. Please check if the tab is named 'senarai tempat' or 'Senarai Tempat' in Google Sheets.")
-    else:
-        search_loc = st.text_input("🔍 Quick Search Location / Department:")
-        filtered_tempat = df_tempat
-        if search_loc.strip():
-            mask = filtered_tempat.astype(str).apply(lambda x: x.str.contains(search_loc, case=False, na=False)).any(axis=1)
-            filtered_tempat = filtered_tempat[mask]
-            
-        st.dataframe(filtered_tempat, use_container_width=True)
-        render_excel_download_button(filtered_tempat, "Senarai_Tempat.xlsx", "📥 Download Location Directory as Excel")

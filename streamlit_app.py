@@ -18,47 +18,56 @@ st.title("🔧 Mechanical Facility Maintenance Dashboard")
 
 # --- GOOGLE SPREADSHEET CONFIGURATION ---
 SPREADSHEET_ID = "1wO7tjlpFIbqVN2HVhDV9wem7KGO0rjIh_J-9vSdYgiY"
-BASE_URL = f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/gviz/tq?tqx=out:csv"
 
-@st.cache_data(ttl=15)
+@st.cache_data(ttl=300)
 def load_master_data():
-    """Fetches the main data sheet as CSV from Google Sheets with clean formatting."""
-    headers = {"User-Agent": "Mozilla/5.0"}
-    try:
-        response = requests.get(BASE_URL, headers=headers, timeout=12)
-        response.raise_for_status()
-        
-        lines = response.text.splitlines()
-        reader = csv.reader(lines)
-        rows = [r for r in reader if any(field.strip() for field in r)]
-        
-        if not rows:
-            return pd.DataFrame()
-        
-        header = [str(col).strip() for col in rows[0]]
-        num_cols = len(header)
-        
-        data = []
-        for row in rows[1:]:
-            if len(row) < num_cols:
-                row = row + [''] * (num_cols - len(row))
-            elif len(row) > num_cols:
-                row = row[:num_cols]
-            data.append(row)
+    """Fetches Master Data with extended timeout (30s) and fallback export URLs."""
+    urls = [
+        f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/export?format=csv",
+        f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/gviz/tq?tqx=out:csv"
+    ]
+    
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36"
+    }
+    
+    for url in urls:
+        try:
+            response = requests.get(url, headers=headers, timeout=30)
+            response.raise_for_status()
             
-        df = pd.DataFrame(data, columns=header)
-        df = df.loc[:, ~df.columns.str.contains('^Unnamed', case=False, na=False)]
-        df = df.loc[:, df.columns != '']
-        df.columns = df.columns.astype(str).str.strip()
-        return df
-    except Exception as e:
-        st.error(f"Failed loading Master Data from Google Sheets: {e}")
-        return pd.DataFrame()
+            lines = response.text.splitlines()
+            reader = csv.reader(lines)
+            rows = [r for r in reader if any(field.strip() for field in r)]
+            
+            if not rows:
+                continue
+            
+            header = [str(col).strip() for col in rows[0]]
+            num_cols = len(header)
+            
+            data = []
+            for row in rows[1:]:
+                if len(row) < num_cols:
+                    row = row + [''] * (num_cols - len(row))
+                elif len(row) > num_cols:
+                    row = row[:num_cols]
+                data.append(row)
+                
+            df = pd.DataFrame(data, columns=header)
+            df = df.loc[:, ~df.columns.str.contains('^Unnamed', case=False, na=False)]
+            df = df.loc[:, df.columns != '']
+            df.columns = df.columns.astype(str).str.strip()
+            return df
+        except Exception:
+            continue
+            
+    return pd.DataFrame()
 
 df = load_master_data()
 
 if df.empty:
-    st.error("⚠️ Unable to retrieve Master Data. Please verify that the Google Sheet is set to 'Anyone with the link can view'.")
+    st.error("⚠️ Unable to retrieve Master Data from Google Sheets. Please verify connection or click 'Refresh Data' in the sidebar.")
     st.stop()
 
 # --- FLEXIBLE COLUMN DETECTION ---
@@ -71,10 +80,7 @@ def find_column(df_in, candidates):
 wi_no_col = find_column(df, ['WI No', 'WI Number', 'WO No', 'WO Number', 'Work Instruction', 'WI_No', 'ID', 'No WI'])
 type_col = find_column(df, ['Work Type', 'WorkType', 'Type', 'Category', 'Work_Type'])
 status_col = find_column(df, ['WI Status', 'Status', 'WIStatus', 'State'])
-
-# Detect PIC List from Master Data
 pic_col = find_column(df, ['PIC List', 'PIC Name', 'PIC', 'Assigned To', 'Technician', 'PIC_Name', 'Person In Charge', 'Senarai PIC'])
-
 date_col = find_column(df, ['Date/Time Received', 'Date', 'Date Received', 'Created Date', 'Received Date'])
 problem_col = find_column(df, ['Problem Description', 'Problem', 'Description', 'Issue', 'Details'])
 location_col = find_column(df, ['Aras', 'Location', 'Jabatan', 'Level', 'Floor', 'Blok', 'Lokasi', 'Tempat'])
@@ -85,7 +91,7 @@ def get_final_pic(row):
     # 1. Directly use PIC from Master Data if populated
     if pic_col and pd.notna(row.get(pic_col)) and str(row.get(pic_col)).strip() != "":
         val = str(row.get(pic_col)).strip().upper()
-        if val not in ["NAN", "NONE", "NULL", "-"]:
+        if val not in ["NAN", "NONE", "NULL", "-", ""]:
             return val
 
     # 2. Fallback Regex Logic (Only if Master Data PIC field is blank)
@@ -137,7 +143,7 @@ def get_final_pic(row):
 # Apply Final PIC Column
 df['Assigned_PIC'] = df.apply(get_final_pic, axis=1)
 
-# Ensure display columns fallback smoothly
+# Display Columns Selection
 target_display_cols = []
 if wi_no_col: target_display_cols.append(wi_no_col)
 if type_col: target_display_cols.append(type_col)
@@ -170,7 +176,12 @@ COLOR_MAP = {
 }
 
 # --- SIDEBAR NAVIGATION AND FILTERS ---
-st.sidebar.header("Navigation & Filters")
+st.sidebar.header("Navigation & Controls")
+
+if st.sidebar.button("🔄 Refresh Data"):
+    st.cache_data.clear()
+    st.rerun()
+
 page = st.sidebar.radio("Go to:", [
     "Main Overview (All Work Types)", 
     "PPM & PIC KPIs", 
@@ -270,7 +281,6 @@ elif page == "PPM & PIC KPIs":
     st.sidebar.markdown("---")
     st.sidebar.subheader("👤 PIC Filters")
     
-    # Extract unique assigned PICs dynamically from data
     unique_pics = sorted([p for p in df['Assigned_PIC'].dropna().unique().tolist() if p != "UNASSIGNED"])
     
     selected_pic = st.sidebar.selectbox("Filter by PIC:", ["All PICs"] + unique_pics)

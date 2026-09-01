@@ -10,7 +10,7 @@ st.set_page_config(page_title="Mechanical Maintenance Hub", layout="wide")
 st.title("🔧 Mechanical Facility Maintenance Dashboard")
 
 # --- LOAD DATA ---
-SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/1wO7tjlpFIbqVN2HVhDV9wem7KGO0rjIh_J-9vSdYgiY/gviz/tq?tqx=out:csv"
+SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/1wO7tjlpFIbqVN2HVhDV9wem7KGO0rjIh_J-9vSdYgiY/edit?usp=sharing"
 
 @st.cache_data(ttl=15)
 def load_data():

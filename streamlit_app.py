@@ -70,7 +70,6 @@ def load_master_data():
       ]
       df = df.loc[:, df.columns != ""]
       df.columns = df.columns.astype(str).str.strip()
-      # Remove duplicate headers to avoid Series indexing issues
       df = df.loc[:, ~df.columns.duplicated()]
       return df
     except Exception:
@@ -102,11 +101,14 @@ def find_column(df_in, candidates):
   return None
 
 
+# Explicitly mapping requested columns
 wi_no_col = find_column(
     df,
     [
+        "WI No.",
         "WI No",
         "WI Number",
+        "WO No.",
         "WO No",
         "WO Number",
         "Work Instruction",
@@ -117,16 +119,41 @@ wi_no_col = find_column(
         "NO. WI",
     ],
 )
-type_col = find_column(
-    df, ["Work Type", "WorkType", "Type", "Category", "Work_Type"]
+status_col = find_column(
+    df, ["WI Status", "Status", "WIStatus", "State", "Work Order Status"]
 )
-status_col = find_column(df, ["WI Status", "Status", "WIStatus", "State"])
+problem_col = find_column(
+    df,
+    [
+        "Problem Description",
+        "Problem",
+        "Description",
+        "Issue",
+        "Details",
+        "Keterangan Masalah",
+    ],
+)
+type_col = find_column(
+    df, ["Work Type", "WorkType", "Type", "Category", "Work_Type", "Jenis Kerja"]
+)
+date_col = find_column(
+    df,
+    [
+        "Date/Time Received",
+        "Date Received",
+        "Date",
+        "Created Date",
+        "Received Date",
+        "Tarikh",
+    ],
+)
 pic_col = find_column(
     df,
     [
+        "pic",
+        "PIC",
         "PIC List",
         "PIC Name",
-        "PIC",
         "Assigned To",
         "Technician",
         "PIC_Name",
@@ -134,26 +161,15 @@ pic_col = find_column(
         "Senarai PIC",
     ],
 )
-date_col = find_column(
-    df,
-    [
-        "Date/Time Received",
-        "Date",
-        "Date Received",
-        "Created Date",
-        "Received Date",
-    ],
-)
-problem_col = find_column(
-    df, ["Problem Description", "Problem", "Description", "Issue", "Details"]
-)
+
+# Auxiliary Location & System Columns for Auto-Assignment Rules
 location_col = find_column(
     df, ["Aras", "Location", "Jabatan", "Level", "Floor", "Blok", "Lokasi", "Tempat"]
 )
 system_col = find_column(df, ["Sistem", "System", "Equipment"])
 
 
-# Helper function to extract safe string representation
+# Helper function for clean string extraction
 def safe_val(row, col_name):
   if col_name and col_name in row and pd.notna(row[col_name]):
     val = str(row[col_name]).strip()
@@ -174,7 +190,7 @@ def get_final_pic(row):
   s_text = safe_val(row, system_col)
   combined_text = f"{p_text} {l_text} {s_text}".upper()
 
-  # System/Equipment & Category Rules
+  # System/Equipment Rules
   system_rules = [
       (
           r"\b(TRANSPORT|TRANSPORTATION|KENDERAAN|AMBULANCE|AMBULANS|SEDAN|BUS|BAS|VAN|CAR|KERETA|PEMANDU|DRIVER|LOGISTIK|STACKER|HYDROPOOL|FORKLIFT|HANDJACK)\b",
@@ -256,19 +272,23 @@ def get_final_pic(row):
   return "UNASSIGNED"
 
 
-# Apply PIC Assignment
+# Assign Final PIC
 df["Assigned_PIC"] = df.apply(get_final_pic, axis=1)
 
-# Target Columns Ordering
+# Target Ordered Columns as requested: WI No., WI Status, Problem Description, Work Type, Date/Time Received, pic
 target_cols = [
     wi_no_col,
-    type_col,
     status_col,
     problem_col,
+    type_col,
     date_col,
-    "Assigned_PIC",
+    pic_col if pic_col else "Assigned_PIC",
 ]
 display_cols = [c for c in target_cols if c and c in df.columns]
+
+# Ensure Assigned_PIC is visible if 'pic' was not originally in the sheet
+if "Assigned_PIC" not in display_cols and "Assigned_PIC" in df.columns:
+  display_cols.append("Assigned_PIC")
 
 if not display_cols:
   display_cols = df.columns.tolist()
@@ -452,12 +472,15 @@ if page == "Main Overview (Master Data)":
 elif page == "PPM & PIC KPIs":
   st.subheader("PIC Performance & PPM KPIs")
 
-  unique_pics = sorted(
-      [p for p in df["Assigned_PIC"].dropna().unique() if p != "UNASSIGNED"]
+  pic_field = "Assigned_PIC" if "Assigned_PIC" in df.columns else pic_col
+  unique_pics = (
+      sorted([p for p in df[pic_field].dropna().unique() if p != "UNASSIGNED"])
+      if pic_field
+      else []
   )
   selected_pic = st.selectbox("Select PIC:", ["All PICs"] + unique_pics)
 
-  pic_df = df if selected_pic == "All PICs" else df[df["Assigned_PIC"] == selected_pic]
+  pic_df = df if selected_pic == "All PICs" else df[df[pic_field] == selected_pic]
 
   total_wis = len(pic_df)
   closed_wis = 0

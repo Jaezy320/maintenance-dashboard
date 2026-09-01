@@ -10,16 +10,20 @@ import csv
 st.set_page_config(page_title="Mechanical Maintenance Hub", layout="wide")
 st.title("🔧 Mechanical Facility Maintenance Dashboard")
 
-# --- LOAD DATA ---
+# --- GOOGLE SHEET CSV URLS ---
+# Master Data Sheet URL
 SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/1wO7tjlpFIbqVN2HVhDV9wem7KGO0rjIh_J-9vSdYgiY/gviz/tq?tqx=out:csv"
 
+# List Asset 2026 Sheet URL (Update `gid=XXXXXX` with the specific tab ID if in the same spreadsheet)
+ASSET_2026_CSV_URL = "https://docs.google.com/spreadsheets/d/1wO7tjlpFIbqVN2HVhDV9wem7KGO0rjIh_J-9vSdYgiY/gviz/tq?tqx=out:csv&gid=123456789"
+
 @st.cache_data(ttl=15)
-def load_data():
+def fetch_csv_data(url):
+    """Helper function to fetch and clean raw CSV data safely from Google Sheets."""
     headers = {"User-Agent": "Mozilla/5.0"}
-    response = requests.get(SHEET_CSV_URL, headers=headers, timeout=10)
+    response = requests.get(url, headers=headers, timeout=10)
     response.raise_for_status()
     
-    # Parse via python csv module to handle mismatched column counts smoothly
     lines = response.text.splitlines()
     reader = csv.reader(lines)
     rows = [r for r in reader if any(field.strip() for field in r)]
@@ -27,7 +31,6 @@ def load_data():
     if not rows:
         return pd.DataFrame()
     
-    # Normalize row lengths based on the header
     header = [str(col).strip() for col in rows[0]]
     num_cols = len(header)
     
@@ -40,15 +43,72 @@ def load_data():
         data.append(row)
         
     df = pd.DataFrame(data, columns=header)
-    
-    # Drop empty and 'Unnamed' columns
     df = df.loc[:, ~df.columns.str.contains('^Unnamed', case=False, na=False)]
     df = df.loc[:, df.columns != '']
-    
     return df
 
+@st.cache_data(ttl=15)
+def load_and_merge_data():
+    # Load Master Data
+    df_master = fetch_csv_data(SHEET_CSV_URL)
+    
+    # Load List Asset 2026 Data
+    try:
+        df_asset_2026 = fetch_csv_data(ASSET_2026_CSV_URL)
+    except Exception:
+        df_asset_2026 = pd.DataFrame()
+
+    # --- FLEXIBLE COLUMN DETECTION ---
+    def find_col(df, candidates):
+        for col in df.columns:
+            if col.strip().lower() in [c.lower() for c in candidates]:
+                return col
+        return None
+
+    # Detect Asset Number and Location columns in Master Data
+    master_asset_col = find_col(df_master, ['Asset No', 'Asset Number', 'Asset_No', 'No Asset', 'Asset ID', 'Asset'])
+    master_loc_col = find_col(df_master, ['Aras', 'Location', 'Jabatan', 'Level', 'Floor', 'Blok', 'Lokasi'])
+
+    # Detect Asset Number and Location columns in Asset 2026 Data
+    asset_asset_col = find_col(df_asset_2026, ['Asset No', 'Asset Number', 'Asset_No', 'No Asset', 'Asset ID', 'Asset'])
+    asset_loc_col = find_col(df_asset_2026, ['Aras', 'Location', 'Jabatan', 'Level', 'Floor', 'Blok', 'Lokasi'])
+
+    # If Location column doesn't exist in Master Data, initialize it
+    if not master_loc_col:
+        df_master['Location'] = ''
+        master_loc_col = 'Location'
+
+    # Map missing locations from List Asset 2026 into Master Data via Asset Number
+    if master_asset_col and asset_asset_col and asset_loc_col and not df_asset_2026.empty:
+        # Create a lookup dictionary: { Asset Number: Location }
+        asset_map = (
+            df_asset_2026.dropna(subset=[asset_asset_col])
+            .drop_duplicates(subset=[asset_asset_col], keep='first')
+            .set_index(asset_asset_col)[asset_loc_col]
+            .astype(str)
+            .to_dict()
+        )
+        
+        # Replace empty strings/nan values with NaN for filling
+        df_master[master_loc_col] = (
+            df_master[master_loc_col]
+            .astype(str)
+            .str.strip()
+            .replace(['nan', 'None', 'NaN', ''], None)
+        )
+        
+        # Fill missing location values using mapped Asset Number
+        df_master[master_loc_col] = df_master[master_loc_col].fillna(
+            df_master[master_asset_col].astype(str).str.strip().map(asset_map)
+        )
+        
+        # Clean up remaining Nones back to empty strings
+        df_master[master_loc_col] = df_master[master_loc_col].fillna('')
+
+    return df_master
+
 try:
-    df = load_data()
+    df = load_and_merge_data()
 except Exception as e:
     st.error(f"⚠️ Data Loading Error: {e}")
     st.stop()
@@ -85,7 +145,7 @@ status_col = find_column(df, ['WI Status', 'Status', 'WIStatus', 'State'])
 pic_col = find_column(df, ['PIC Name', 'PIC', 'Assigned To', 'Technician', 'PIC_Name', 'Person In Charge'])
 date_col = find_column(df, ['Date/Time Received', 'Date', 'Date Received', 'Created Date', 'Received Date'])
 problem_col = find_column(df, ['Problem Description', 'Problem', 'Description', 'Issue', 'Details'])
-location_col = find_column(df, ['Aras', 'Location', 'Jabatan', 'Level', 'Floor', 'Blok'])
+location_col = find_column(df, ['Aras', 'Location', 'Jabatan', 'Level', 'Floor', 'Blok', 'Lokasi'])
 system_col = find_column(df, ['Sistem', 'System', 'Equipment'])
 
 # --- AUTO PIC ASSIGNMENT LOGIC ---

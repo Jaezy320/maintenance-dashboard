@@ -3,6 +3,7 @@ import pandas as pd
 import plotly.express as px
 import requests
 import io
+import re
 
 # --- PAGE SETUP ---
 st.set_page_config(page_title="Mechanical Maintenance Hub", layout="wide")
@@ -18,7 +19,12 @@ def load_data():
     response.raise_for_status()
     
     df = pd.read_csv(io.StringIO(response.text))
-    df.columns = df.columns.str.strip()
+    df.columns = df.columns.astype(str).str.strip()
+    
+    # Drop empty and 'Unnamed' columns
+    df = df.loc[:, ~df.columns.str.contains('^Unnamed', case=False, na=False)]
+    df = df.loc[:, df.columns != '']
+    
     return df
 
 try:
@@ -62,65 +68,70 @@ problem_col = find_column(df, ['Problem Description', 'Problem', 'Description', 
 location_col = find_column(df, ['Aras', 'Location', 'Jabatan', 'Level', 'Floor', 'Blok'])
 system_col = find_column(df, ['Sistem', 'System', 'Equipment'])
 
-# --- AUTO PIC ASSIGNMENT LOGIC ---
+# --- AUTO PIC ASSIGNMENT LOGIC (REGEX BOUNDARIES TO PREVENT FALSE MATCHES) ---
 def auto_assign_pic(row):
-    # If PIC is explicitly set in Google Sheet, retain it
     if pic_col and pd.notna(row.get(pic_col)) and str(row.get(pic_col)).strip() != "":
         return str(row.get(pic_col)).strip().upper()
     
-    # Merge text fields to scan for problem/location keywords
     text_to_scan = f"{row.get(problem_col, '')} {row.get(location_col, '')} {row.get(system_col, '')}".lower()
     
-    # 1. Equipment / System Keywords
-    if any(k in text_to_scan for k in ['chiller', 'cooling tower']):
+    # 1. Equipment & System Keyword Matching
+    if re.search(r'\b(chiller|cooling tower)\b', text_to_scan):
         return "IMRAN"
-    if any(k in text_to_scan for k in ['autoclave']):
+    if re.search(r'\b(autoclave)\b', text_to_scan):
         return "AMIR"
-    if any(k in text_to_scan for k in ['hydropool']):
+    if re.search(r'\b(hydropool)\b', text_to_scan):
         return "NAZRAN"
-    if any(k in text_to_scan for k in ['pneumatic', 'pts', 'tube']):
+    if re.search(r'\b(pneumatic|pts|tube)\b', text_to_scan):
         return "FARHAN"
-    if any(k in text_to_scan for k in ['lpg', 'gas cylinder', 'gas tank', 'pump']):
+    if re.search(r'\b(lpg|gas cylinder|gas tank|pump)\b', text_to_scan):
         return "HASLA"
-    if any(k in text_to_scan for k in ['lift', 'elevator', 'forklift', 'handjack', 'bas', 'bus']):
+    if re.search(r'\b(lift|elevator|forklift|handjack|bas|bus)\b', text_to_scan):
         return "SYAZWAN"
-    if any(k in text_to_scan for k in ['agss', 'air compressor', 'manifold', 'terminal unit']):
+    if re.search(r'\b(agss|air compressor|manifold|terminal unit)\b', text_to_scan):
         return "HAIKAL"
-    if any(k in text_to_scan for k in ['avsu', 'avsum', 'pendant', 'repeater alarm']):
+    if re.search(r'\b(avsu|avsum|pendant|repeater alarm)\b', text_to_scan):
         return "BUKHARI"
-    if any(k in text_to_scan for k in ['fire', 'smoke', 'sprinkler', 'hydrant', 'hose reel', 'alarm', 'pyrogen']):
+    if re.search(r'\b(fire|smoke|sprinkler|hydrant|hose reel|pyrogen)\b', text_to_scan):
         return "AZMI & SYAZWAN"
-    if any(k in text_to_scan for k in ['stacker', 'ambulance', 'sedan', 'rehab']):
+    if re.search(r'\b(stacker|ambulance|sedan|rehab)\b', text_to_scan):
         return "NAZRAN"
         
-    # 2. Location / Area Keywords
-    if any(k in text_to_scan for k in ['main block level 1', 'main block aras 1', 'blok utama level 1', 'blok utama aras 1', 'level 1', 'aras 1']):
-        return "AMIR & SHARY"
-    if any(k in text_to_scan for k in ['pakar', 'klinik', 'oftalmologi', 'pergigian', 'orl']):
-        return "FAIZ"
-    if any(k in text_to_scan for k in ['aras g', 'level g', 'lobi', 'hasil', 'pendaftaran', 'kaunter']):
-        return "AMIR & SHARY"
-    if any(k in text_to_scan for k in ['aras 3', 'level 3', 'kecemasan', 'xray', 'x-ray', 'radiologi', 'mow']):
-        return "IMRAN"
-    if any(k in text_to_scan for k in ['aras 4', 'level 4', 'mot', 'pac', 'nicu', 'ccu', 'anaesthesia', 'ldu', 'bersalin']):
-        return "MASLIZA"
-    if any(k in text_to_scan for k in ['aras 5', 'level 5', 'icu', 'daycare', 'rawatan harian']):
-        return "SHAKIR"
-    if any(k in text_to_scan for k in ['aras 6', 'level 6', 'aras 7', 'level 7', 'hdw', 'got', 'dewan bedah', 'cssd', 'rhu']):
-        return "FARHAN"
-    if any(k in text_to_scan for k in ['aras 8', 'level 8', 'o&g', 'obstetrik', 'ginekologi']):
-        return "MASLIZA"
-    if any(k in text_to_scan for k in ['aras 9', 'level 9', 'aras 11', 'level 11', 'aras 16', 'level 16', 'aras 17', 'level 17', 'wad 9', 'wad 11', 'ortopedik', 'plant room', 'awsb']):
-        return "AZIZI"
-    if any(k in text_to_scan for k in ['aras 10', 'level 10', 'wad 10', '10a', '10b']):
+    # 2. Location & Floor Level Matching (Strict Regex Word Boundaries)
+    if re.search(r'\b(aras\s*10|level\s*10|wad\s*10|10a|10b)\b', text_to_scan):
         return "SHARY"
-    if any(k in text_to_scan for k in ['aras 12', 'level 12', 'wad 12', 'pediatrik', 'patologi', 'aras 2', 'level 2', 'penyelidikan']):
+        
+    if re.search(r'\b(aras\s*12|level\s*12|wad\s*12|pediatrik|patologi|aras\s*2|level\s*2|penyelidikan)\b', text_to_scan):
         return "FAIZUL"
-    if any(k in text_to_scan for k in ['aras 13', 'level 13', 'aras 15', 'level 15', 'kuarters', 'vip', 'eksekutif']):
+        
+    if re.search(r'\b(aras\s*13|level\s*13|aras\s*15|level\s*15|aras\s*5|level\s*5|icu|daycare|rawatan harian|kuarters|vip|eksekutif)\b', text_to_scan):
         return "SHAKIR"
-    if any(k in text_to_scan for k in ['aras 14', 'level 14']):
+        
+    if re.search(r'\b(aras\s*14|level\s*14)\b', text_to_scan):
         return "SYAZWAN"
-    if any(k in text_to_scan for k in ['rekod', 'perpustakaan', 'dietetik', 'sajian', 'pemandu', 'logistik', 'it']):
+        
+    if re.search(r'\b(aras\s*9|level\s*9|aras\s*11|level\s*11|aras\s*16|level\s*16|aras\s*17|level\s*17|wad\s*9|wad\s*11|ortopedik|plant room|awsb)\b', text_to_scan):
+        return "AZIZI"
+        
+    if re.search(r'\b(aras\s*6|level\s*6|aras\s*7|level\s*7|hdw|got|dewan bedah|cssd|rhu)\b', text_to_scan):
+        return "FARHAN"
+        
+    if re.search(r'\b(aras\s*4|level\s*4|aras\s*8|level\s*8|mot|pac|nicu|ccu|anaesthesia|ldu|bersalin|o&g|obstetrik|ginekologi)\b', text_to_scan):
+        return "MASLIZA"
+        
+    if re.search(r'\b(aras\s*3|level\s*3|kecemasan|xray|x-ray|radiologi|mow)\b', text_to_scan):
+        return "IMRAN"
+        
+    if re.search(r'\b(aras\s*1|level\s*1|main block level 1|main block aras 1|blok utama level 1|blok utama aras 1)\b', text_to_scan):
+        return "AMIR & SHARY"
+        
+    if re.search(r'\b(aras\s*g|level\s*g|lobi|hasil|pendaftaran|kaunter)\b', text_to_scan):
+        return "AMIR & SHARY"
+        
+    if re.search(r'\b(pakar|klinik|oftalmologi|pergigian|orl)\b', text_to_scan):
+        return "FAIZ"
+        
+    if re.search(r'\b(rekod|perpustakaan|dietetik|sajian|pemandu|logistik|it)\b', text_to_scan):
         return "NAZRAN"
 
     return "UNASSIGNED"
@@ -180,7 +191,7 @@ if type_col:
 else:
     ppm_data, breakdown_data, cm_data = pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
 
-display_cols = [c for c in df.columns if c not in ['Parsed_Date', 'Year', 'Month_Name']]
+display_cols = [c for c in df.columns if c not in ['Parsed_Date', 'Year', 'Month_Name'] and not str(c).startswith('Unnamed:')]
 
 # --- PAGE 1: MAIN OVERVIEW ---
 if page == "Main Overview (All Work Types)":
@@ -272,13 +283,13 @@ elif page == "🔍 PIC Roster Directory":
         {"Category": "System/Equipment", "Scope / Keywords": "Stacker, Ambulances, Sedan Car", "PIC In-Charge": "NAZRAN"},
         {"Category": "Floor / Area", "Scope / Keywords": "Main Block Level 1 / Aras 1 (Blok Utama)", "PIC In-Charge": "AMIR & SHARY"},
         {"Category": "Floor / Area", "Scope / Keywords": "Blok Pakar & Specialist Clinics (Oftalmologi, Pediatrik, Pergigian, etc.)", "PIC In-Charge": "FAIZ"},
-        {"Category": "Floor / Area", "Scope / Keywords": "Aras G (Main Lobby, Registration, Kaunter Hasil)", "PIC In-Charge": "AMIR & SHARY"},
+        {"Category": "Floor / Area", "Scope / Keywords": "Aras 1 (Main Lobby, Registration, Kaunter Hasil)", "PIC In-Charge": "AMIR & SHARY"},
         {"Category": "Floor / Area", "Scope / Keywords": "Aras 2 (Penyelidikan & Kawalan Kualiti), Aras 12 (Wad Pediatrik)", "PIC In-Charge": "FAIZUL"},
-        {"Category": "Floor / Area", "Scope / Keywords": "Aras 3 (Emergency & Trauma, X-Ray, MOW)", "PIC In-Charge": "IMRAN"},
-        {"Category": "Floor / Area", "Scope / Keywords": "Aras 4 (MOT, PAC, NICU, CCU, Anaesthesia), Aras 8 (Wad O&G)", "PIC In-Charge": "MASLIZA"},
+        {"Category": "Floor / Area", "Scope / Keywords": "Aras 3 (Emergency & Trauma, X-Ray, MDW)", "PIC In-Charge": "IMRAN"},
+        {"Category": "Floor / Area", "Scope / Keywords": "Aras 4 (MOT, PAC, NICU, CCU, Anaesthesia), Aras 8 (Wad O&G) (8A & 8B)", "PIC In-Charge": "MASLIZA"},
         {"Category": "Floor / Area", "Scope / Keywords": "Aras 5 (ICU, Daycare), Aras 13 (Wad Executive/VIP), Aras 15 (Kuarters G)", "PIC In-Charge": "SHAKIR"},
         {"Category": "Floor / Area", "Scope / Keywords": "Aras 6 (HDW, Dewan Bedah GOT), Aras 7 (CSSD, RHU)", "PIC In-Charge": "FARHAN"},
-        {"Category": "Floor / Area", "Scope / Keywords": "Aras 9 (Wad Pembedahan), Aras 11 (Wad Ortopedik), Aras 16 (AWSB), Aras 17 (Plant Room)", "PIC In-Charge": "AZIZI"},
+        {"Category": "Floor / Area", "Scope / Keywords": "Aras 9 (Wad Pembedahan), Aras 11 (Wad Ortopedik),(AWSB), (Plant Room)", "PIC In-Charge": "AZIZI"},
         {"Category": "Floor / Area", "Scope / Keywords": "Aras 10 (Wad Perubatan Lelaki 10A / Isolasi 10B)", "PIC In-Charge": "SHARY"},
         {"Category": "Floor / Area", "Scope / Keywords": "Aras 14", "PIC In-Charge": "SYAZWAN"},
     ]

@@ -180,8 +180,7 @@ if st.sidebar.button("🔄 Refresh Master Data"):
 
 page = st.sidebar.radio("View Page:", [
     "Main Overview (Master Data)", 
-    "PPM & PIC KPIs", 
-    "📋 Duty Roster Directory"
+    "PPM & PIC KPIs"
 ])
 
 st.sidebar.markdown("---")
@@ -296,47 +295,3 @@ elif page == "PPM & PIC KPIs":
         
     st.dataframe(pic_df[display_cols] if not pic_df.empty else pic_df, use_container_width=True)
     download_excel(pic_df, f"KPI_{selected_pic}.xlsx", f"📥 Export {selected_pic} Data")
-
-# --- PAGE 3: DUTY ROSTER DIRECTORY ---
-elif page == "📋 Duty Roster Directory":
-    st.subheader("📋 Hospital Shah Alam - Mechanical Duty Roster Directory")
-    
-    roster_data = [
-        {"Category": "Main Block Level", "Scope / Floor Level": "Level 1 / Aras 1 / L1 (Include Aras G, Lobby)", "PIC In-Charge": "AMIR & SHARY"},
-        {"Category": "Main Block Level", "Scope / Floor Level": "Level 2 / Aras 2 / L2 (Penyelidikan)", "PIC In-Charge": "FAIZUL"},
-        {"Category": "Main Block Level", "Scope / Floor Level": "Level 3 / Aras 3 / L3 (Emergency, Radiologi, MOW, MDW, Wad 3)", "PIC In-Charge": "IMRAN"},
-        {"Category": "Main Block Level", "Scope / Floor Level": "Level 4 / Aras 4 / L4 (MOT, PAC, NICU, CCU, Anaesthesia)", "PIC In-Charge": "MASLIZA"},
-        {"Category": "Main Block Level", "Scope / Floor Level": "Level 5 / Aras 5 / L5 (ICU, Daycare, Rawatan Harian)", "PIC In-Charge": "SHAKIR"},
-        {"Category": "Main Block Level", "Scope / Floor Level": "Level 6 / Aras 6 / L6 (HDW, Dewan Bedah GOT)", "PIC In-Charge": "FARHAN"},
-        {"Category": "Main Block Level", "Scope / Floor Level": "Level 7 / Aras 7 / L7 (CSSD, RHU)", "PIC In-Charge": "FARHAN"},
-        {"Category": "Main Block Level", "Scope / Floor Level": "Level 8 / Aras 8 / L8 (Wad O&G, 8A, 8B, LDU, Bersalin)", "PIC In-Charge": "MASLIZA"},
-        {"Category": "Main Block Level", "Scope / Floor Level": "Level 9 / Aras 9 / L9 (Wad Pembedahan, 9A, 9B)", "PIC In-Charge": "AZIZI"},
-        {"Category": "Main Block Level", "Scope / Floor Level": "Level 10 / Aras 10 / L10 (Wad Perubatan Lelaki 10A / Isolasi 10B)", "PIC In-Charge": "SHARY"},
-        {"Category": "Main Block Level", "Scope / Floor Level": "Level 11 / Aras 11 / L11 (Wad Ortopedik, 11A, 11B)", "PIC In-Charge": "AZIZI"},
-        {"Category": "Main Block Level", "Scope / Floor Level": "Level 12 / Aras 12 / L12 (Wad Pediatrik, 12A, 12B, Patologi)", "PIC In-Charge": "FAIZUL"},
-        {"Category": "Main Block Level", "Scope / Floor Level": "Level 13 / Aras 13 / L13 (Wad Executive/VIP, 13A, 13B)", "PIC In-Charge": "SHAKIR"},
-        {"Category": "Main Block Level", "Scope / Floor Level": "Level 14 / Aras 14 / L14", "PIC In-Charge": "SYAZWAN"},
-        {"Category": "Outside Main Block", "Scope / Floor Level": "Kuarters G, Asrama Housemen", "PIC In-Charge": "SHAKIR"},
-        {"Category": "Outside Main Block", "Scope / Floor Level": "Plant Room, AWSB, External Buildings", "PIC In-Charge": "AZIZI"},
-        {"Category": "Outside Main Block", "Scope / Floor Level": "Blok Pakar, Specialist Clinics (SC) - All Clinics", "PIC In-Charge": "FAIZ"},
-        {"Category": "System/Equipment", "Scope / Floor Level": "Chiller, Cooling Tower", "PIC In-Charge": "IMRAN"},
-        {"Category": "System/Equipment", "Scope / Floor Level": "Autoclave", "PIC In-Charge": "AMIR"},
-        {"Category": "System/Equipment", "Scope / Floor Level": "Hydropool, Stacker, Ambulances, Sedan", "PIC In-Charge": "NAZRAN"},
-        {"Category": "System/Equipment", "Scope / Floor Level": "Pneumatic Tube (PTS)", "PIC In-Charge": "FARHAN"},
-        {"Category": "System/Equipment", "Scope / Floor Level": "Pump, Liquid Petroleum Gas (LPG)", "PIC In-Charge": "HASLA"},
-        {"Category": "System/Equipment", "Scope / Floor Level": "Lifts, Forklift, Handjack, Bus", "PIC In-Charge": "SYAZWAN"},
-        {"Category": "System/Equipment", "Scope / Floor Level": "Medical Gas (AGSS, Air Compressor, Manifold, Terminal Unit)", "PIC In-Charge": "HAIKAL"},
-        {"Category": "System/Equipment", "Scope / Floor Level": "Medical Gas (AVSU, AVSUM, Pendant, Repeater Alarm)", "PIC In-Charge": "BUKHARI"},
-        {"Category": "System/Equipment", "Scope / Floor Level": "Fire System (Smoke Detector, Hose Reel, Alarm, Hydrant)", "PIC In-Charge": "AZMI & SYAZWAN"},
-    ]
-    
-    roster_df = pd.DataFrame(roster_data)
-    roster_search = st.text_input("🔍 Search Roster Scope/PIC:")
-    if roster_search.strip():
-        roster_df = roster_df[
-            roster_df['Scope / Floor Level'].str.contains(roster_search, case=False, na=False) |
-            roster_df['PIC In-Charge'].str.contains(roster_search, case=False, na=False)
-        ]
-        
-    st.dataframe(roster_df, use_container_width=True)
-    download_excel(roster_df, "Hospital_Shah_Alam_PIC_Roster.xlsx", "📥 Download Duty Roster")

@@ -27,6 +27,26 @@ except Exception as e:
     st.error(f"⚠️ Data Loading Error: {e}")
     st.stop()
 
+# --- COLOR MAPPING FOR STATUS ---
+COLOR_MAP = {
+    "Open": "#E53E3E",
+    "OPEN": "#E53E3E",
+    "open": "#E53E3E",
+    "In Progress": "#DD6B20",
+    "IN PROGRESS": "#DD6B20",
+    "in progress": "#DD6B20",
+    "Pending": "#DD6B20",
+    "PENDING": "#DD6B20",
+    "Closed": "#3182CE",
+    "CLOSED": "#3182CE",
+    "closed": "#3182CE",
+    "Completed": "#3182CE",
+    "COMPLETED": "#3182CE",
+    "completed": "#3182CE",
+    "Done": "#3182CE",
+    "DONE": "#3182CE"
+}
+
 # --- FLEXIBLE COLUMN MATCHING ---
 def find_column(df, candidates):
     for col in df.columns:
@@ -38,8 +58,73 @@ type_col = find_column(df, ['Work Type', 'WorkType', 'Type', 'Category', 'Work_T
 status_col = find_column(df, ['WI Status', 'Status', 'WIStatus', 'State'])
 pic_col = find_column(df, ['PIC Name', 'PIC', 'Assigned To', 'Technician', 'PIC_Name', 'Person In Charge'])
 date_col = find_column(df, ['Date/Time Received', 'Date', 'Date Received', 'Created Date', 'Received Date'])
+problem_col = find_column(df, ['Problem Description', 'Problem', 'Description', 'Issue', 'Details'])
 location_col = find_column(df, ['Aras', 'Location', 'Jabatan', 'Level', 'Floor'])
 system_col = find_column(df, ['Sistem', 'System', 'Equipment'])
+
+# --- AUTO PIC ASSIGNMENT LOGIC BASED ON OFFICIAL MECHANICAL ROSTER ---
+def auto_assign_pic(row):
+    # If PIC is already explicitly set in Google Sheet, keep it
+    if pic_col and pd.notna(row.get(pic_col)) and str(row.get(pic_col)).strip() != "":
+        return str(row.get(pic_col)).strip().upper()
+    
+    # Merge text fields to scan for problem keywords
+    text_to_scan = f"{row.get(problem_col, '')} {row.get(location_col, '')} {row.get(system_col, '')}".lower()
+    
+    # 1. Equipment / System Keywords
+    if any(k in text_to_scan for k in ['chiller', 'cooling tower']):
+        return "IMRAN"
+    if any(k in text_to_scan for k in ['autoclave']):
+        return "AMIR"
+    if any(k in text_to_scan for k in ['hydropool']):
+        return "NAZRAN"
+    if any(k in text_to_scan for k in ['pneumatic', 'pts', 'tube']):
+        return "FARHAN"
+    if any(k in text_to_scan for k in ['lpg', 'gas cylinder', 'gas tank', 'pump']):
+        return "HASLA"
+    if any(k in text_to_scan for k in ['lift', 'elevator', 'forklift', 'handjack', 'bas', 'bus']):
+        return "SYAZWAN"
+    if any(k in text_to_scan for k in ['agss', 'air compressor', 'manifold', 'terminal unit', 'avsu']):
+        return "HAIKAL"
+    if any(k in text_to_scan for k in ['pendant', 'avsum', 'repeater alarm']):
+        return "BUKHARI"
+    if any(k in text_to_scan for k in ['fire', 'smoke', 'sprinkler', 'hydrant', 'hose reel', 'alarm', 'pyrogen']):
+        return "AZMI"
+    if any(k in text_to_scan for k in ['stacker', 'ambulance', 'sedan', 'rehab']):
+        return "NAZRAN"
+        
+    # 2. Location / Area Keywords
+    if any(k in text_to_scan for k in ['pakar', 'klinik', 'oftalmologi', 'pergigian', 'orl']):
+        return "FAIZ"
+    if any(k in text_to_scan for k in ['aras 3', 'kecemasan', 'xray', 'x-ray', 'radiologi', 'mow']):
+        return "IMRAN"
+    if any(k in text_to_scan for k in ['aras 4', 'mot', 'pac', 'nicu', 'ccu', 'anaesthesia', 'ldu', 'bersalin']):
+        return "MASLIZA"
+    if any(k in text_to_scan for k in ['aras 5', 'icu', 'daycare', 'rawatan harian']):
+        return "SHAKIR"
+    if any(k in text_to_scan for k in ['aras 6', 'aras 7', 'hdw', 'got', 'dewan bedah', 'cssd', 'rhu']):
+        return "FARHAN"
+    if any(k in text_to_scan for k in ['aras 8', 'o&g', 'obstetrik', 'ginekologi']):
+        return "MASLIZA"
+    if any(k in text_to_scan for k in ['aras 9', 'aras 11', 'aras 16', 'aras 17', 'wad 9', 'wad 11', 'ortopedik', 'plant room', 'awsb']):
+        return "AZIZI"
+    if any(k in text_to_scan for k in ['aras 10', 'wad 10', '10a', '10b']):
+        return "SHARY"
+    if any(k in text_to_scan for k in ['aras 12', 'wad 12', 'pediatrik', 'patologi', 'aras 2', 'penyelidikan']):
+        return "FAIZUL"
+    if any(k in text_to_scan for k in ['aras 13', 'aras 15', 'kuarters', 'vip', 'eksekutif']):
+        return "SHAKIR"
+    if any(k in text_to_scan for k in ['aras 14']):
+        return "SYAZWAN"
+    if any(k in text_to_scan for k in ['lobi', 'hasil', 'pendaftaran', 'kaunter']):
+        return "AMIR"
+    if any(k in text_to_scan for k in ['rekod', 'perpustakaan', 'dietetik', 'sajian', 'pemandu', 'logistik', 'it']):
+        return "NAZRAN"
+
+    return "UNASSIGNED"
+
+# Create or Update Auto-Assigned PIC Column
+df['Assigned_PIC'] = df.apply(auto_assign_pic, axis=1)
 
 # --- DATE PARSING ---
 if date_col:
@@ -49,19 +134,17 @@ if date_col:
 
 # --- SIDEBAR FILTERS ---
 st.sidebar.header("Navigation & Global Filters")
-page = st.sidebar.radio("Go to:", ["Main Overview (All Work Types)", "PPM & PIC KPIs"])
+page = st.sidebar.radio("Go to:", ["Main Overview (All Work Types)", "PPM & PIC KPIs", "🔍 PIC Roster Directory"])
 
 st.sidebar.markdown("---")
 st.sidebar.subheader("📅 Date Filters")
 
-# Year Filter
 if date_col and not df['Year'].dropna().empty:
     available_years = sorted(df['Year'].dropna().astype(int).unique().tolist(), reverse=True)
     selected_year = st.sidebar.selectbox("Select Year:", ["All Years"] + [str(y) for y in available_years])
     if selected_year != "All Years":
         df = df[df['Year'] == int(selected_year)]
 
-# Month Filter
 if date_col and not df['Parsed_Date'].dropna().empty:
     month_order = ["January", "February", "March", "April", "May", "June", 
                    "July", "August", "September", "October", "November", "December"]
@@ -71,6 +154,15 @@ if date_col and not df['Parsed_Date'].dropna().empty:
     selected_month = st.sidebar.selectbox("Select Month:", ["All Months"] + sorted_months)
     if selected_month != "All Months":
         df = df[df['Month_Name'] == selected_month]
+
+st.sidebar.markdown("---")
+st.sidebar.subheader("🔍 Problem Description Search")
+
+problem_keyword = ""
+if problem_col:
+    problem_keyword = st.sidebar.text_input("Filter by Keyword:", placeholder="e.g. leak, gas, aircon, chiller")
+    if problem_keyword.strip():
+        df = df[df[problem_col].astype(str).str.contains(problem_keyword, case=False, na=False)]
 
 # --- DATA CATEGORIZATION ---
 if type_col:
@@ -121,23 +213,15 @@ elif page == "PPM & PIC KPIs":
     st.subheader("PPM Tracking & Mechanical PIC Performance")
     
     st.sidebar.markdown("---")
-    st.sidebar.subheader("👤 PIC & System Filters")
+    st.sidebar.subheader("👤 PIC Filters")
     
-    # Master PIC List Fallback
-    master_pics = ["AMIR", "AZIZI", "AZMI", "BUKHARI", "FAIZ", "FAIZUL", "FARHAN", 
-                   "HAIKAL", "HASLA", "IMRAN", "MASLIZA", "NAZRAN", "SHAKIR", "SHARY", "SYAZWAN"]
-    
-    if pic_col:
-        found_pics = df[pic_col].dropna().unique().tolist()
-        all_pics = sorted(list(set(master_pics + [str(p).strip().upper() for p in found_pics if str(p).strip()])))
-    else:
-        all_pics = master_pics
+    all_pics = sorted(list(set(df['Assigned_PIC'].dropna().unique().tolist())))
 
     selected_pic = st.sidebar.selectbox("Filter by PIC:", ["All PICs"] + all_pics)
     
     filtered_ppm = ppm_data
-    if pic_col and selected_pic != "All PICs":
-        filtered_ppm = filtered_ppm[filtered_ppm[pic_col].astype(str).str.upper().str.strip() == selected_pic]
+    if selected_pic != "All PICs":
+        filtered_ppm = filtered_ppm[filtered_ppm['Assigned_PIC'] == selected_pic]
         
     total_ppm = len(filtered_ppm)
     closed_ppm = 0
@@ -152,10 +236,53 @@ elif page == "PPM & PIC KPIs":
     kpi_col3.metric("Completion KPI %", f"{kpi_percentage:.1f}%")
     
     if total_ppm > 0 and status_col:
-        fig = px.pie(filtered_ppm, names=status_col, title=f"PPM Status Distribution ({selected_pic})", hole=0.4)
+        fig = px.pie(
+            filtered_ppm,
+            names=status_col,
+            color=status_col,
+            color_discrete_map=COLOR_MAP,
+            title=f"PPM Status Distribution ({selected_pic})",
+            hole=0.4
+        )
         st.plotly_chart(fig, use_container_width=True)
     
     st.write(f"### Current Work Instructions for {selected_pic}")
-    if not pic_col:
-        st.info("💡 Add a column named **'PIC Name'** in your Google Sheet to link work orders to specific team members.")
+    if problem_keyword.strip():
+        st.caption(f"🔍 Filtering tasks containing keyword: **'{problem_keyword}'**")
+        
     st.dataframe(filtered_ppm[display_cols] if not filtered_ppm.empty else filtered_ppm, use_container_width=True)
+
+# --- PAGE 3: DUTY ROSTER DIRECTORY ---
+elif page == "🔍 PIC Roster Directory":
+    st.subheader("📋 Hospital Shah Alam - Mechanical Team Official Duty Directory")
+    
+    roster_data = [
+        {"Category": "System/Equipment", "Scope / Keywords": "Chiller, Cooling Tower", "PIC In-Charge": "IMRAN"},
+        {"Category": "System/Equipment", "Scope / Keywords": "Autoclave", "PIC In-Charge": "AMIR"},
+        {"Category": "System/Equipment", "Scope / Keywords": "Hydropool", "PIC In-Charge": "NAZRAN"},
+        {"Category": "System/Equipment", "Scope / Keywords": "Pneumatic Tube (PTS)", "PIC In-Charge": "FARHAN"},
+        {"Category": "System/Equipment", "Scope / Keywords": "Pump, Liquid Petroleum Gas (LPG)", "PIC In-Charge": "HASLA"},
+        {"Category": "System/Equipment", "Scope / Keywords": "Lifts, Forklift, Handjack, Bus", "PIC In-Charge": "SYAZWAN"},
+        {"Category": "System/Equipment", "Scope / Keywords": "Medical Gas (AGSS, Air Compressor, Manifold, AVSU)", "PIC In-Charge": "HAIKAL"},
+        {"Category": "System/Equipment", "Scope / Keywords": "Medical Gas (Pendant, Repeater Alarm, AVSUM)", "PIC In-Charge": "BUKHARI"},
+        {"Category": "System/Equipment", "Scope / Keywords": "Fire System (Smoke Detector, Hose Reel, Alarm, Hydrant)", "PIC In-Charge": "AZMI & SYAZWAN"},
+        {"Category": "System/Equipment", "Scope / Keywords": "Stacker, Ambulances, Sedan Car", "PIC In-Charge": "NAZRAN"},
+        {"Category": "Floor / Area", "Scope / Keywords": "Blok Pakar & Specialist Clinics (Oftalmologi, Pediatrik, Pergigian, etc.)", "PIC In-Charge": "FAIZ"},
+        {"Category": "Floor / Area", "Scope / Keywords": "Aras G (Main Lobby, Registration, Kaunter Hasil)", "PIC In-Charge": "AMIR & SHARY"},
+        {"Category": "Floor / Area", "Scope / Keywords": "Aras 2 (Penyelidikan & Kawalan Kualiti), Aras 12 (Wad Pediatrik)", "PIC In-Charge": "FAIZUL"},
+        {"Category": "Floor / Area", "Scope / Keywords": "Aras 3 (Emergency & Trauma, X-Ray, MOW)", "PIC In-Charge": "IMRAN"},
+        {"Category": "Floor / Area", "Scope / Keywords": "Aras 4 (MOT, PAC, NICU, CCU, Anaesthesia), Aras 8 (Wad O&G)", "PIC In-Charge": "MASLIZA"},
+        {"Category": "Floor / Area", "Scope / Keywords": "Aras 5 (ICU, Daycare), Aras 13 (Wad Executive/VIP), Aras 15 (Kuarters G)", "PIC In-Charge": "SHAKIR"},
+        {"Category": "Floor / Area", "Scope / Keywords": "Aras 6 (HDW, Dewan Bedah GOT), Aras 7 (CSSD, RHU)", "PIC In-Charge": "FARHAN"},
+        {"Category": "Floor / Area", "Scope / Keywords": "Aras 9 (Wad Pembedahan), Aras 11 (Wad Ortopedik), Aras 16 (AWSB), Aras 17 (Plant Room)", "PIC In-Charge": "AZIZI"},
+        {"Category": "Floor / Area", "Scope / Keywords": "Aras 10 (Wad Perubatan Lelaki 10A / Isolasi 10B)", "PIC In-Charge": "SHARY"},
+        {"Category": "Floor / Area", "Scope / Keywords": "Aras 14", "PIC In-Charge": "SYAZWAN"},
+    ]
+    
+    roster_df = pd.DataFrame(roster_data)
+    
+    search_term = st.text_input("🔍 Quick Lookup (Type any problem, area, or equipment name):")
+    if search_term.strip():
+        roster_df = roster_df[roster_df['Scope / Keywords'].str.contains(search_term, case=False, na=False)]
+        
+    st.dataframe(roster_df, use_container_width=True)

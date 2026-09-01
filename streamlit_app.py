@@ -4,13 +4,14 @@ import plotly.express as px
 import requests
 import io
 import re
+import csv
 
 # --- PAGE SETUP ---
 st.set_page_config(page_title="Mechanical Maintenance Hub", layout="wide")
 st.title("🔧 Mechanical Facility Maintenance Dashboard")
 
 # --- LOAD DATA ---
-SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/1wO7tjlpFIbqVN2HVhDV9wem7KGO0rjIh_J-9vSdYgiY/edit?usp=sharing"
+SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/1wO7tjlpFIbqVN2HVhDV9wem7KGO0rjIh_J-9vSdYgiY/gviz/tq?tqx=out:csv"
 
 @st.cache_data(ttl=15)
 def load_data():
@@ -18,8 +19,27 @@ def load_data():
     response = requests.get(SHEET_CSV_URL, headers=headers, timeout=10)
     response.raise_for_status()
     
-    df = pd.read_csv(io.StringIO(response.text))
-    df.columns = df.columns.astype(str).str.strip()
+    # Parse via python csv module to handle mismatched column counts smoothly
+    lines = response.text.splitlines()
+    reader = csv.reader(lines)
+    rows = [r for r in reader if any(field.strip() for field in r)]
+    
+    if not rows:
+        return pd.DataFrame()
+    
+    # Normalize row lengths based on the header
+    header = [str(col).strip() for col in rows[0]]
+    num_cols = len(header)
+    
+    data = []
+    for row in rows[1:]:
+        if len(row) < num_cols:
+            row = row + [''] * (num_cols - len(row))
+        elif len(row) > num_cols:
+            row = row[:num_cols]
+        data.append(row)
+        
+    df = pd.DataFrame(data, columns=header)
     
     # Drop empty and 'Unnamed' columns
     df = df.loc[:, ~df.columns.str.contains('^Unnamed', case=False, na=False)]

@@ -5,8 +5,8 @@ import requests
 import io
 
 # --- PAGE SETUP ---
-st.set_page_config(page_title="Facility Maintenance Hub", layout="wide")
-st.title("🔧 Facility Maintenance Dashboard")
+st.set_page_config(page_title="Mechanical Maintenance Hub", layout="wide")
+st.title("🔧 Mechanical Facility Maintenance Dashboard")
 
 # --- LOAD DATA ---
 SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/1wO7tjlpFIbqVN2HVhDV9wem7KGO0rjIh_J-9vSdYgiY/gviz/tq?tqx=out:csv"
@@ -37,7 +37,9 @@ def find_column(df, candidates):
 type_col = find_column(df, ['Work Type', 'WorkType', 'Type', 'Category', 'Work_Type'])
 status_col = find_column(df, ['WI Status', 'Status', 'WIStatus', 'State'])
 pic_col = find_column(df, ['PIC Name', 'PIC', 'Assigned To', 'Technician', 'PIC_Name', 'Person In Charge'])
-date_col = find_column(df, ['Date/Time Received', 'Date', 'Date Received', 'Created Date', 'Received Date', 'Time Received'])
+date_col = find_column(df, ['Date/Time Received', 'Date', 'Date Received', 'Created Date', 'Received Date'])
+location_col = find_column(df, ['Aras', 'Location', 'Jabatan', 'Level', 'Floor'])
+system_col = find_column(df, ['Sistem', 'System', 'Equipment'])
 
 # --- DATE PARSING ---
 if date_col:
@@ -46,7 +48,7 @@ if date_col:
     df['Month_Name'] = df['Parsed_Date'].dt.strftime('%B')
 
 # --- SIDEBAR FILTERS ---
-st.sidebar.header("Navigation & Filters")
+st.sidebar.header("Navigation & Global Filters")
 page = st.sidebar.radio("Go to:", ["Main Overview (All Work Types)", "PPM & PIC KPIs"])
 
 st.sidebar.markdown("---")
@@ -56,7 +58,6 @@ st.sidebar.subheader("📅 Date Filters")
 if date_col and not df['Year'].dropna().empty:
     available_years = sorted(df['Year'].dropna().astype(int).unique().tolist(), reverse=True)
     selected_year = st.sidebar.selectbox("Select Year:", ["All Years"] + [str(y) for y in available_years])
-    
     if selected_year != "All Years":
         df = df[df['Year'] == int(selected_year)]
 
@@ -68,7 +69,6 @@ if date_col and not df['Parsed_Date'].dropna().empty:
     sorted_months = [m for m in month_order if m in present_months]
     
     selected_month = st.sidebar.selectbox("Select Month:", ["All Months"] + sorted_months)
-    
     if selected_month != "All Months":
         df = df[df['Month_Name'] == selected_month]
 
@@ -86,12 +86,11 @@ if type_col:
 else:
     ppm_data, breakdown_data, cm_data = pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
 
-# Clean up helper columns from display tables
 display_cols = [c for c in df.columns if c not in ['Parsed_Date', 'Year', 'Month_Name']]
 
 # --- PAGE 1: MAIN OVERVIEW ---
 if page == "Main Overview (All Work Types)":
-    st.subheader("Global Maintenance Status")
+    st.subheader("Global Mechanical Maintenance Overview")
     
     active_count = 0
     if status_col:
@@ -106,7 +105,7 @@ if page == "Main Overview (All Work Types)":
     st.markdown("---")
 
     st.write("### Work Orders by Category")
-    tab1, tab2, tab3, tab4 = st.tabs(["PPM (Preventive)", "Breakdown", "CM (Corrective)", "All Filtered Data"])
+    tab1, tab2, tab3, tab4 = st.tabs(["PPM (Preventive)", "Breakdown", "CM (Corrective)", "All Raw Data"])
     
     with tab1:
         st.dataframe(ppm_data[display_cols] if not ppm_data.empty else ppm_data, use_container_width=True)
@@ -119,35 +118,44 @@ if page == "Main Overview (All Work Types)":
 
 # --- PAGE 2: PPM & PIC KPIs ---
 elif page == "PPM & PIC KPIs":
-    st.subheader("PPM Tracking & PIC Performance")
+    st.subheader("PPM Tracking & Mechanical PIC Performance")
     
-    if not ppm_data.empty and pic_col:
-        pic_list = ppm_data[pic_col].dropna().unique()
-        selected_pic = st.sidebar.selectbox("Filter by PIC:", ["All PICs"] + list(pic_list))
-        
-        filtered_ppm = ppm_data if selected_pic == "All PICs" else ppm_data[ppm_data[pic_col] == selected_pic]
-            
-        total_ppm = len(filtered_ppm)
-        closed_ppm = 0
-        if status_col:
-            closed_ppm = len(filtered_ppm[filtered_ppm[status_col].astype(str).str.upper().str.strip().isin(['CLOSED', 'COMPLETED', 'DONE'])])
-            
-        kpi_percentage = (closed_ppm / total_ppm * 100) if total_ppm > 0 else 0
-        
-        kpi_col1, kpi_col2, kpi_col3 = st.columns(3)
-        kpi_col1.metric(f"Total PPM WIs ({selected_pic})", total_ppm)
-        kpi_col2.metric("Completed / Closed", closed_ppm)
-        kpi_col3.metric("Completion KPI %", f"{kpi_percentage:.1f}%")
-        
-        if total_ppm > 0 and status_col:
-            fig = px.pie(filtered_ppm, names=status_col, title=f"PPM Status Distribution ({selected_pic})", hole=0.4)
-            st.plotly_chart(fig, use_container_width=True)
-        
-        st.write(f"### Current Work Instructions for {selected_pic}")
-        st.dataframe(filtered_ppm[display_cols], use_container_width=True)
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("👤 PIC & System Filters")
+    
+    # Master PIC List Fallback
+    master_pics = ["AMIR", "AZIZI", "AZMI", "BUKHARI", "FAIZ", "FAIZUL", "FARHAN", 
+                   "HAIKAL", "HASLA", "IMRAN", "MASLIZA", "NAZRAN", "SHAKIR", "SHARY", "SYAZWAN"]
+    
+    if pic_col:
+        found_pics = df[pic_col].dropna().unique().tolist()
+        all_pics = sorted(list(set(master_pics + [str(p).strip().upper() for p in found_pics if str(p).strip()])))
     else:
-        if ppm_data.empty:
-            st.info("No PPM data available for the selected Year/Month filter.")
-        if not pic_col:
-            st.warning("Please add a column named **'PIC Name'** or **'PIC'** in your Google Sheet to enable PIC KPI filtering.")
-        st.dataframe(ppm_data[display_cols] if not ppm_data.empty else ppm_data, use_container_width=True)
+        all_pics = master_pics
+
+    selected_pic = st.sidebar.selectbox("Filter by PIC:", ["All PICs"] + all_pics)
+    
+    filtered_ppm = ppm_data
+    if pic_col and selected_pic != "All PICs":
+        filtered_ppm = filtered_ppm[filtered_ppm[pic_col].astype(str).str.upper().str.strip() == selected_pic]
+        
+    total_ppm = len(filtered_ppm)
+    closed_ppm = 0
+    if status_col and not filtered_ppm.empty:
+        closed_ppm = len(filtered_ppm[filtered_ppm[status_col].astype(str).str.upper().str.strip().isin(['CLOSED', 'COMPLETED', 'DONE'])])
+        
+    kpi_percentage = (closed_ppm / total_ppm * 100) if total_ppm > 0 else 0
+    
+    kpi_col1, kpi_col2, kpi_col3 = st.columns(3)
+    kpi_col1.metric(f"Total PPM WIs ({selected_pic})", total_ppm)
+    kpi_col2.metric("Completed / Closed", closed_ppm)
+    kpi_col3.metric("Completion KPI %", f"{kpi_percentage:.1f}%")
+    
+    if total_ppm > 0 and status_col:
+        fig = px.pie(filtered_ppm, names=status_col, title=f"PPM Status Distribution ({selected_pic})", hole=0.4)
+        st.plotly_chart(fig, use_container_width=True)
+    
+    st.write(f"### Current Work Instructions for {selected_pic}")
+    if not pic_col:
+        st.info("💡 Add a column named **'PIC Name'** in your Google Sheet to link work orders to specific team members.")
+    st.dataframe(filtered_ppm[display_cols] if not filtered_ppm.empty else filtered_ppm, use_container_width=True)

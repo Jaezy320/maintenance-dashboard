@@ -59,16 +59,16 @@ status_col = find_column(df, ['WI Status', 'Status', 'WIStatus', 'State'])
 pic_col = find_column(df, ['PIC Name', 'PIC', 'Assigned To', 'Technician', 'PIC_Name', 'Person In Charge'])
 date_col = find_column(df, ['Date/Time Received', 'Date', 'Date Received', 'Created Date', 'Received Date'])
 problem_col = find_column(df, ['Problem Description', 'Problem', 'Description', 'Issue', 'Details'])
-location_col = find_column(df, ['Aras', 'Location', 'Jabatan', 'Level', 'Floor'])
+location_col = find_column(df, ['Aras', 'Location', 'Jabatan', 'Level', 'Floor', 'Blok'])
 system_col = find_column(df, ['Sistem', 'System', 'Equipment'])
 
-# --- AUTO PIC ASSIGNMENT LOGIC BASED ON OFFICIAL MECHANICAL ROSTER ---
+# --- AUTO PIC ASSIGNMENT LOGIC ---
 def auto_assign_pic(row):
-    # If PIC is already explicitly set in Google Sheet, keep it
+    # If PIC is explicitly set in Google Sheet, retain it
     if pic_col and pd.notna(row.get(pic_col)) and str(row.get(pic_col)).strip() != "":
         return str(row.get(pic_col)).strip().upper()
     
-    # Merge text fields to scan for problem keywords
+    # Merge text fields to scan for problem/location keywords
     text_to_scan = f"{row.get(problem_col, '')} {row.get(location_col, '')} {row.get(system_col, '')}".lower()
     
     # 1. Equipment / System Keywords
@@ -84,40 +84,42 @@ def auto_assign_pic(row):
         return "HASLA"
     if any(k in text_to_scan for k in ['lift', 'elevator', 'forklift', 'handjack', 'bas', 'bus']):
         return "SYAZWAN"
-    if any(k in text_to_scan for k in ['agss', 'air compressor', 'manifold', 'terminal unit', 'avsu']):
+    if any(k in text_to_scan for k in ['agss', 'air compressor', 'manifold', 'terminal unit']):
         return "HAIKAL"
-    if any(k in text_to_scan for k in ['pendant', 'avsum', 'repeater alarm']):
+    if any(k in text_to_scan for k in ['avsu', 'avsum', 'pendant', 'repeater alarm']):
         return "BUKHARI"
     if any(k in text_to_scan for k in ['fire', 'smoke', 'sprinkler', 'hydrant', 'hose reel', 'alarm', 'pyrogen']):
-        return "AZMI"
+        return "AZMI & SYAZWAN"
     if any(k in text_to_scan for k in ['stacker', 'ambulance', 'sedan', 'rehab']):
         return "NAZRAN"
         
     # 2. Location / Area Keywords
+    if any(k in text_to_scan for k in ['main block level 1', 'main block aras 1', 'blok utama level 1', 'blok utama aras 1', 'level 1', 'aras 1']):
+        return "AMIR & SHARY"
     if any(k in text_to_scan for k in ['pakar', 'klinik', 'oftalmologi', 'pergigian', 'orl']):
         return "FAIZ"
-    if any(k in text_to_scan for k in ['aras 3', 'kecemasan', 'xray', 'x-ray', 'radiologi', 'mow']):
+    if any(k in text_to_scan for k in ['aras g', 'level g', 'lobi', 'hasil', 'pendaftaran', 'kaunter']):
+        return "AMIR & SHARY"
+    if any(k in text_to_scan for k in ['aras 3', 'level 3', 'kecemasan', 'xray', 'x-ray', 'radiologi', 'mow']):
         return "IMRAN"
-    if any(k in text_to_scan for k in ['aras 4', 'mot', 'pac', 'nicu', 'ccu', 'anaesthesia', 'ldu', 'bersalin']):
+    if any(k in text_to_scan for k in ['aras 4', 'level 4', 'mot', 'pac', 'nicu', 'ccu', 'anaesthesia', 'ldu', 'bersalin']):
         return "MASLIZA"
-    if any(k in text_to_scan for k in ['aras 5', 'icu', 'daycare', 'rawatan harian']):
+    if any(k in text_to_scan for k in ['aras 5', 'level 5', 'icu', 'daycare', 'rawatan harian']):
         return "SHAKIR"
-    if any(k in text_to_scan for k in ['aras 6', 'aras 7', 'hdw', 'got', 'dewan bedah', 'cssd', 'rhu']):
+    if any(k in text_to_scan for k in ['aras 6', 'level 6', 'aras 7', 'level 7', 'hdw', 'got', 'dewan bedah', 'cssd', 'rhu']):
         return "FARHAN"
-    if any(k in text_to_scan for k in ['aras 8', 'o&g', 'obstetrik', 'ginekologi']):
+    if any(k in text_to_scan for k in ['aras 8', 'level 8', 'o&g', 'obstetrik', 'ginekologi']):
         return "MASLIZA"
-    if any(k in text_to_scan for k in ['aras 9', 'aras 11', 'aras 16', 'aras 17', 'wad 9', 'wad 11', 'ortopedik', 'plant room', 'awsb']):
+    if any(k in text_to_scan for k in ['aras 9', 'level 9', 'aras 11', 'level 11', 'aras 16', 'level 16', 'aras 17', 'level 17', 'wad 9', 'wad 11', 'ortopedik', 'plant room', 'awsb']):
         return "AZIZI"
-    if any(k in text_to_scan for k in ['aras 10', 'wad 10', '10a', '10b']):
+    if any(k in text_to_scan for k in ['aras 10', 'level 10', 'wad 10', '10a', '10b']):
         return "SHARY"
-    if any(k in text_to_scan for k in ['aras 12', 'wad 12', 'pediatrik', 'patologi', 'aras 2', 'penyelidikan']):
+    if any(k in text_to_scan for k in ['aras 12', 'level 12', 'wad 12', 'pediatrik', 'patologi', 'aras 2', 'level 2', 'penyelidikan']):
         return "FAIZUL"
-    if any(k in text_to_scan for k in ['aras 13', 'aras 15', 'kuarters', 'vip', 'eksekutif']):
+    if any(k in text_to_scan for k in ['aras 13', 'level 13', 'aras 15', 'level 15', 'kuarters', 'vip', 'eksekutif']):
         return "SHAKIR"
-    if any(k in text_to_scan for k in ['aras 14']):
+    if any(k in text_to_scan for k in ['aras 14', 'level 14']):
         return "SYAZWAN"
-    if any(k in text_to_scan for k in ['lobi', 'hasil', 'pendaftaran', 'kaunter']):
-        return "AMIR"
     if any(k in text_to_scan for k in ['rekod', 'perpustakaan', 'dietetik', 'sajian', 'pemandu', 'logistik', 'it']):
         return "NAZRAN"
 
@@ -215,13 +217,14 @@ elif page == "PPM & PIC KPIs":
     st.sidebar.markdown("---")
     st.sidebar.subheader("👤 PIC Filters")
     
-    all_pics = sorted(list(set(df['Assigned_PIC'].dropna().unique().tolist())))
+    master_pics = ["AMIR", "AZIZI", "AZMI", "BUKHARI", "FAIZ", "FAIZUL", "FARHAN", 
+                   "HAIKAL", "HASLA", "IMRAN", "MASLIZA", "NAZRAN", "SHAKIR", "SHARY", "SYAZWAN"]
 
-    selected_pic = st.sidebar.selectbox("Filter by PIC:", ["All PICs"] + all_pics)
+    selected_pic = st.sidebar.selectbox("Filter by PIC:", ["All PICs"] + master_pics)
     
     filtered_ppm = ppm_data
     if selected_pic != "All PICs":
-        filtered_ppm = filtered_ppm[filtered_ppm['Assigned_PIC'] == selected_pic]
+        filtered_ppm = filtered_ppm[filtered_ppm['Assigned_PIC'].astype(str).str.contains(selected_pic, case=False, na=False)]
         
     total_ppm = len(filtered_ppm)
     closed_ppm = 0
@@ -263,10 +266,11 @@ elif page == "🔍 PIC Roster Directory":
         {"Category": "System/Equipment", "Scope / Keywords": "Pneumatic Tube (PTS)", "PIC In-Charge": "FARHAN"},
         {"Category": "System/Equipment", "Scope / Keywords": "Pump, Liquid Petroleum Gas (LPG)", "PIC In-Charge": "HASLA"},
         {"Category": "System/Equipment", "Scope / Keywords": "Lifts, Forklift, Handjack, Bus", "PIC In-Charge": "SYAZWAN"},
-        {"Category": "System/Equipment", "Scope / Keywords": "Medical Gas (AGSS, Air Compressor, Manifold, AVSU)", "PIC In-Charge": "HAIKAL"},
-        {"Category": "System/Equipment", "Scope / Keywords": "Medical Gas (Pendant, Repeater Alarm, AVSUM)", "PIC In-Charge": "BUKHARI"},
+        {"Category": "System/Equipment", "Scope / Keywords": "Medical Gas (AGSS, Air Compressor, Manifold, Terminal Unit)", "PIC In-Charge": "HAIKAL"},
+        {"Category": "System/Equipment", "Scope / Keywords": "Medical Gas (AVSU, AVSUM, Pendant, Repeater Alarm)", "PIC In-Charge": "BUKHARI"},
         {"Category": "System/Equipment", "Scope / Keywords": "Fire System (Smoke Detector, Hose Reel, Alarm, Hydrant)", "PIC In-Charge": "AZMI & SYAZWAN"},
         {"Category": "System/Equipment", "Scope / Keywords": "Stacker, Ambulances, Sedan Car", "PIC In-Charge": "NAZRAN"},
+        {"Category": "Floor / Area", "Scope / Keywords": "Main Block Level 1 / Aras 1 (Blok Utama)", "PIC In-Charge": "AMIR & SHARY"},
         {"Category": "Floor / Area", "Scope / Keywords": "Blok Pakar & Specialist Clinics (Oftalmologi, Pediatrik, Pergigian, etc.)", "PIC In-Charge": "FAIZ"},
         {"Category": "Floor / Area", "Scope / Keywords": "Aras G (Main Lobby, Registration, Kaunter Hasil)", "PIC In-Charge": "AMIR & SHARY"},
         {"Category": "Floor / Area", "Scope / Keywords": "Aras 2 (Penyelidikan & Kawalan Kualiti), Aras 12 (Wad Pediatrik)", "PIC In-Charge": "FAIZUL"},

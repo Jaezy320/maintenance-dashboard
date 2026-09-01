@@ -101,7 +101,7 @@ def find_column(df_in, candidates):
   return None
 
 
-# Explicitly mapping requested columns
+# Target Columns Mapping
 wi_no_col = find_column(
     df,
     [
@@ -177,7 +177,7 @@ def safe_val(row, col_name):
   return ""
 
 
-# --- PIC AUTO-ASSIGNMENT ENGINE ---
+# --- EXPANDED PIC AUTO-ASSIGNMENT ENGINE ---
 def get_final_pic(row):
   # 1. Use existing PIC from Master Data if present
   existing_pic = safe_val(row, pic_col)
@@ -190,22 +190,51 @@ def get_final_pic(row):
   s_text = safe_val(row, system_col)
   combined_text = f"{p_text} {l_text} {s_text}".upper()
 
-  # System/Equipment Rules
+  # Expanded System, Equipment & Trade Rules
   system_rules = [
+      # Vehicles & Transportation
       (
           r"\b(TRANSPORT|TRANSPORTATION|KENDERAAN|AMBULANCE|AMBULANS|SEDAN|BUS|BAS|VAN|CAR|KERETA|PEMANDU|DRIVER|LOGISTIK|STACKER|HYDROPOOL|FORKLIFT|HANDJACK)\b",
           "NAZRAN",
       ),
-      (r"\b(CHILLER|COOLING TOWER)\b", "IMRAN"),
-      (r"\b(AUTOCLAVE)\b", "AMIR"),
-      (r"\b(PNEUMATIC|PTS|TUBE)\b", "FARHAN"),
-      (r"\b(LPG|GAS CYLINDER|GAS TANK|PUMP)\b", "HASLA"),
-      (r"\b(LIFT|ELEVATOR)\b", "SYAZWAN"),
-      (r"\b(AGSS|AIR COMPRESSOR|MANIFOLD|TERMINAL UNIT)\b", "HAIKAL"),
-      (r"\b(AVSU|AVSUM|PENDANT|REPEATER ALARM)\b", "BUKHARI"),
+      # HVAC, Chillers, Cooling Towers, AHU, FCU, Split Units
       (
-          r"\b(FIRE|SMOKE|SPRINKLER|HYDRANT|HOSE REEL|PYROGEN)\b",
+          r"\b(CHILLER|COOLING TOWER|AHU|FCU|AIR-COND|AIR COND|AIRCOND|HVAC|COOLING|CHILLED|BLOWER|FAN|VENTILATION|EXHAUST|AIR HANDLER|COMPRESSOR UNIT)\b",
+          "IMRAN",
+      ),
+      # Autoclave, Sterilizer & CSSD Equipment
+      (
+          r"\b(AUTOCLAVE|STERILIZER|WASHER DISINFECTOR|STEAM BOILER|CSSD EQUIP)\b",
+          "AMIR",
+      ),
+      # Pneumatic Tube System
+      (r"\b(PNEUMATIC|PTS|TUBE|PTS TUBE)\b", "FARHAN"),
+      # Plumbing, Water, Pumps, LPG, Drainage, Sanitation
+      (
+          r"\b(LPG|GAS CYLINDER|GAS TANK|PUMP|PAM|PAIP|PLUMBING|WATER|TANGKI|TANK|SINKI|SINK|TANDAS|TOILET|LEAK|BOCOR|BOCORAN|SALURAN|SUMP|DRAIN|SEWER|FLUSH|BILIK AIR)\b",
+          "HASLA",
+      ),
+      # Lifts, Elevators & Escalators
+      (r"\b(LIFT|ELEVATOR|ESCALATOR|DUMBWAITER)\b", "SYAZWAN"),
+      # Medical Gas, AGSS, Compressors, Manifold, Vacuum
+      (
+          r"\b(AGSS|AIR COMPRESSOR|MANIFOLD|TERMINAL UNIT|OXYGEN|VACUUM|GAS MEDIK|MEDICAL GAS|WALL UNIT|OUTLET)\b",
+          "HAIKAL",
+      ),
+      # Alarm, AVSU, Pendant
+      (
+          r"\b(AVSU|AVSUM|PENDANT|REPEATER ALARM|ALARM PANEL|GAS ALARM)\b",
+          "BUKHARI",
+      ),
+      # Fire Fighting System
+      (
+          r"\b(FIRE|SMOKE|SPRINKLER|HYDRANT|HOSE REEL|PYROGEN|BOMBA|EXTINGUISHER|GELUNG AIR)\b",
           "AZMI & SYAZWAN",
+      ),
+      # Civil, Building, Doors, Locks, Roofing, Furniture
+      (
+          r"\b(PINTU|DOOR|LOCK|KUNCI|WINDOW|TINGKAP|CEILING|SYILING|FLOOR|LANTAI|WALL|DINDING|ROOF|BUMBUNG|PAINTING|CAT|CIVIL|BUILDING|PERABOT|TILE|JITAK)\b",
+          "AZIZI",
       ),
   ]
 
@@ -213,30 +242,33 @@ def get_final_pic(row):
     if re.search(pattern, combined_text):
       return pic
 
-  # Location Rules
+  # Expanded Location & Department Rules
   location_rules = [
       (
-          r"\b(ARAS\s*0?1\b|LEVEL\s*0?1\b|\bl0?1\b|MAIN BLOCK LEVEL 1|MAIN BLOCK ARAS 1|BLOK UTAMA LEVEL 1|BLOK UTAMA ARAS 1|ARAS G|LEVEL G|LOBI|HASIL|PENDAFTARAN|KAUNTER)\b",
+          r"\b(ARAS\s*0?1\b|LEVEL\s*0?1\b|\bl0?1\b|MAIN BLOCK LEVEL 1|MAIN BLOCK ARAS 1|BLOK UTAMA LEVEL 1|BLOK UTAMA ARAS 1|ARAS G|LEVEL G|LOBI|HASIL|PENDAFTARAN|KAUNTER|PHARMACY|FARMASI)\b",
           "AMIR & SHARY",
       ),
-      (r"\b(ARAS\s*0?2\b|LEVEL\s*0?2\b|\bl0?2\b|PENYELIDIKAN)\b", "FAIZUL"),
       (
-          r"\b(ARAS\s*0?3\b|LEVEL\s*0?3\b|\bl0?3\b|WAD\s*3|KECEMASAN|XRAY|X-RAY|RADIOLOGI|MOW|MDW)\b",
+          r"\b(ARAS\s*0?2\b|LEVEL\s*0?2\b|\bl0?2\b|PENYELIDIKAN|LAB|MAKMAL|BLOOD BANK|TABUNG DARAH)\b",
+          "FAIZUL",
+      ),
+      (
+          r"\b(ARAS\s*0?3\b|LEVEL\s*0?3\b|\bl0?3\b|WAD\s*3|KECEMASAN|ED|ETD|XRAY|X-RAY|RADIOLOGI|MOW|MDW)\b",
           "IMRAN",
       ),
       (
-          r"\b(ARAS\s*0?4\b|LEVEL\s*0?4\b|\bl0?4\b|WAD\s*4|MOT|PAC|NICU|CCU|ANAESTHESIA)\b",
+          r"\b(ARAS\s*0?4\b|LEVEL\s*0?4\b|\bl0?4\b|WAD\s*4|MOT|PAC|NICU|CCU|ANAESTHESIA|ANESTHESIA)\b",
           "MASLIZA",
       ),
       (
-          r"\b(ARAS\s*0?5\b|LEVEL\s*0?5\b|\bl0?5\b|ICU|DAYCARE|RAWATAN HARIAN)\b",
+          r"\b(ARAS\s*0?5\b|LEVEL\s*0?5\b|\bl0?5\b|ICU|DAYCARE|RAWATAN HARIAN|HEMODIALYSIS|DIALYSIS)\b",
           "SHAKIR",
       ),
       (
-          r"\b(ARAS\s*0?6\b|LEVEL\s*0?6\b|\bl0?6\b|HDW|GOT|DEWAN BEDAH)\b",
+          r"\b(ARAS\s*0?6\b|LEVEL\s*0?6\b|\bl0?6\b|HDW|GOT|DEWAN BEDAH|OPERATING THEATRE|OT)\b",
           "FARHAN",
       ),
-      (r"\b(ARAS\s*0?7\b|LEVEL\s*0?7\b|\bl0?7\b|CSSD|RHU)\b", "FARHAN"),
+      (r"\b(ARAS\s*0?7\b|LEVEL\s*0?7\b|\bl0?7\b|CSSD|RHU|ENDOSCOPY)\b", "FARHAN"),
       (
           r"\b(ARAS\s*0?8\b|LEVEL\s*0?8\b|\bl0?8\b|WAD\s*8|8A|8B|LDU|BERSALIN|O&G|OBSTETRIK|GINEKOLOGI)\b",
           "MASLIZA",
@@ -257,12 +289,18 @@ def get_final_pic(row):
       ),
       (r"\b(ARAS\s*14\b|LEVEL\s*14\b|\bl14\b)\b", "SYAZWAN"),
       (
-          r"\b(PAKAR|KLINIK|OFTALMOLOGI|PERGIGIAN|ORL|SC|SPECIALIST CLINIC)\b",
+          r"\b(PAKAR|KLINIK|OFTALMOLOGI|PERGIGIAN|ORL|SC|SPECIALIST CLINIC|AUDIOLOGY)\b",
           "FAIZ",
       ),
-      (r"\b(KUARTERS|ASRAMA|HOUSEMAN|HOUSEMEN)\b", "SHAKIR"),
-      (r"\b(AWSB|PLANT ROOM|EXTERNAL|LUAR MAIN BLOCK|LUAR)\b", "AZIZI"),
-      (r"\b(REKOD|PERPUSTAKAAN|DIETETIK|SAJIAN|IT)\b", "NAZRAN"),
+      (r"\b(KUARTERS|ASRAMA|HOUSEMAN|HOUSEMEN|HOSTEL)\b", "SHAKIR"),
+      (
+          r"\b(AWSB|PLANT ROOM|EXTERNAL|LUAR MAIN BLOCK|LUAR|BOILER|MORTUARY|BILIK MAYAT|PARKING|LALUAN)\b",
+          "AZIZI",
+      ),
+      (
+          r"\b(REKOD|PERPUSTAKAAN|DIETETIK|SAJIAN|KITCHEN|DAPUR|IT|DOBI|LAUNDRY)\b",
+          "NAZRAN",
+      ),
   ]
 
   for pattern, pic in location_rules:
@@ -275,18 +313,20 @@ def get_final_pic(row):
 # Assign Final PIC
 df["Assigned_PIC"] = df.apply(get_final_pic, axis=1)
 
-# Target Ordered Columns as requested: WI No., WI Status, Problem Description, Work Type, Date/Time Received, pic
+# Ensure 'pic' column points to Assigned_PIC if original is empty/missing
+active_pic_col = pic_col if pic_col else "Assigned_PIC"
+
+# Target Ordered Columns: WI No., WI Status, Problem Description, Work Type, Date/Time Received, pic
 target_cols = [
     wi_no_col,
     status_col,
     problem_col,
     type_col,
     date_col,
-    pic_col if pic_col else "Assigned_PIC",
+    active_pic_col,
 ]
 display_cols = [c for c in target_cols if c and c in df.columns]
 
-# Ensure Assigned_PIC is visible if 'pic' was not originally in the sheet
 if "Assigned_PIC" not in display_cols and "Assigned_PIC" in df.columns:
   display_cols.append("Assigned_PIC")
 
@@ -316,7 +356,7 @@ COLOR_MAP = {
 }
 
 # --- SIDEBAR & FILTERS ---
-st.sidebar.header("Controls & Filters")
+st.sidebar.header("⚙️ Controls & Filters")
 
 if st.sidebar.button("🔄 Refresh Master Data"):
   st.cache_data.clear()
@@ -328,6 +368,33 @@ page = st.sidebar.radio(
 
 st.sidebar.markdown("---")
 
+# --- NEW: DEDICATED PIC SEARCH & FILTER ---
+st.sidebar.subheader("👤 PIC Search & Filter")
+pic_search_term = st.sidebar.text_input(
+    "🔍 Search PIC Name:", placeholder="e.g. IMRAN, AZIZI, FARHAN..."
+)
+
+all_pics = sorted(
+    [p for p in df["Assigned_PIC"].dropna().unique() if str(p).strip() != ""]
+)
+selected_pics = st.sidebar.multiselect(
+    "Filter Specific PIC(s):",
+    options=["All PICs"] + all_pics,
+    default=["All PICs"],
+)
+
+if pic_search_term.strip():
+  df = df[
+      df["Assigned_PIC"]
+      .astype(str)
+      .str.contains(pic_search_term.strip(), case=False, na=False)
+  ]
+elif "All PICs" not in selected_pics and selected_pics:
+  df = df[df["Assigned_PIC"].isin(selected_pics)]
+
+st.sidebar.markdown("---")
+
+# --- DATE & KEYWORD FILTERS ---
 if date_col and "Year" in df.columns and not df["Year"].dropna().empty:
   years = sorted(df["Year"].dropna().astype(int).unique().tolist(), reverse=True)
   selected_year = st.sidebar.selectbox(
@@ -366,7 +433,7 @@ if (
 
 if problem_col:
   search_keyword = st.sidebar.text_input(
-      "Search Description:", placeholder="e.g., leak, chiller, gas, ambulance"
+      "Search Issue/Problem:", placeholder="e.g., leak, chiller, gas, ambulance"
   )
   if search_keyword.strip():
     df = df[
@@ -430,18 +497,22 @@ if page == "Main Overview (Master Data)":
         ]
     )
 
-  m1, m2, m3, m4 = st.columns(4)
+  unassigned_count = len(df[df["Assigned_PIC"] == "UNASSIGNED"])
+
+  m1, m2, m3, m4, m5 = st.columns(5)
   m1.metric("Total WIs", len(df))
   m2.metric("Active / Open WIs", active_count)
   m3.metric("PPM WIs", len(ppm_data))
   m4.metric("Breakdown / CM WIs", len(breakdown_data) + len(cm_data))
+  m5.metric("Unassigned WIs", unassigned_count)
 
   st.markdown("---")
-  tab1, tab2, tab3, tab4 = st.tabs([
+  tab1, tab2, tab3, tab4, tab5 = st.tabs([
       "All Master Data",
       "PPM Data",
       "Breakdown Data",
       "Corrective (CM) Data",
+      "Unassigned WIs",
   ])
 
   with tab1:
@@ -467,20 +538,28 @@ if page == "Main Overview (Master Data)":
         use_container_width=True,
     )
     download_excel(cm_data, "CM_Data.xlsx", "📥 Export CM Data")
+  with tab5:
+    unassigned_df = df[df["Assigned_PIC"] == "UNASSIGNED"]
+    st.dataframe(
+        unassigned_df[display_cols] if not unassigned_df.empty else unassigned_df,
+        use_container_width=True,
+    )
+    download_excel(
+        unassigned_df, "Unassigned_WIs.xlsx", "📥 Export Unassigned WIs"
+    )
 
 # --- PAGE 2: PPM & PIC KPIS ---
 elif page == "PPM & PIC KPIs":
   st.subheader("PIC Performance & PPM KPIs")
 
-  pic_field = "Assigned_PIC" if "Assigned_PIC" in df.columns else pic_col
-  unique_pics = (
-      sorted([p for p in df[pic_field].dropna().unique() if p != "UNASSIGNED"])
-      if pic_field
-      else []
+  unique_pics = sorted(
+      [p for p in df["Assigned_PIC"].dropna().unique() if p != "UNASSIGNED"]
   )
   selected_pic = st.selectbox("Select PIC:", ["All PICs"] + unique_pics)
 
-  pic_df = df if selected_pic == "All PICs" else df[df[pic_field] == selected_pic]
+  pic_df = (
+      df if selected_pic == "All PICs" else df[df["Assigned_PIC"] == selected_pic]
+  )
 
   total_wis = len(pic_df)
   closed_wis = 0

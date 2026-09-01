@@ -8,7 +8,7 @@ import csv
 
 # --- PAGE CONFIGURATION ---
 st.set_page_config(
-    page_title="Mechanical Maintenance Hub",
+    page_title="Mechanical Facility Maintenance Hub",
     page_icon="🔧",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -21,7 +21,7 @@ SPREADSHEET_ID = "1wO7tjlpFIbqVN2HVhDV9wem7KGO0rjIh_J-9vSdYgiY"
 
 @st.cache_data(ttl=300)
 def load_master_data():
-    """Fetches Master Data with extended timeout (30s) and fallback export URLs."""
+    """Fetches Master Data from Google Sheets with fallback URLs and parsing."""
     urls = [
         f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/export?format=csv",
         f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/gviz/tq?tqx=out:csv"
@@ -33,8 +33,12 @@ def load_master_data():
     
     for url in urls:
         try:
-            response = requests.get(url, headers=headers, timeout=30)
+            response = requests.get(url, headers=headers, timeout=20)
             response.raise_for_status()
+            
+            # Check if returned response is an HTML login/error page
+            if "html" in response.headers.get("Content-Type", "").lower() or "<html" in response.text[:200].lower():
+                continue
             
             lines = response.text.splitlines()
             reader = csv.reader(lines)
@@ -64,10 +68,12 @@ def load_master_data():
             
     return pd.DataFrame()
 
+# Load Master Data
 df = load_master_data()
 
 if df.empty:
-    st.error("⚠️ Unable to retrieve Master Data from Google Sheets. Please verify connection or click 'Refresh Data' in the sidebar.")
+    st.error("⚠️ Unable to retrieve Master Data from Google Sheets. Ensure your sheet sharing permission is set to 'Anyone with the link can view'.")
+    st.info("💡 **Quick Fix:** In Google Sheets, click **Share** (top-right) ➔ Change **General Access** to **Anyone with the link**.")
     st.stop()
 
 # --- FLEXIBLE COLUMN DETECTION ---
@@ -86,15 +92,15 @@ problem_col = find_column(df, ['Problem Description', 'Problem', 'Description', 
 location_col = find_column(df, ['Aras', 'Location', 'Jabatan', 'Level', 'Floor', 'Blok', 'Lokasi', 'Tempat'])
 system_col = find_column(df, ['Sistem', 'System', 'Equipment'])
 
-# --- PIC ASSIGNMENT ENGINE ---
+# --- PIC AUTO-ASSIGNMENT ENGINE ---
 def get_final_pic(row):
-    # 1. Directly use PIC from Master Data if populated
+    # 1. Use existing PIC from Master Data if present
     if pic_col and pd.notna(row.get(pic_col)) and str(row.get(pic_col)).strip() != "":
         val = str(row.get(pic_col)).strip().upper()
         if val not in ["NAN", "NONE", "NULL", "-", ""]:
             return val
 
-    # 2. Fallback Regex Logic (Only if Master Data PIC field is blank)
+    # 2. Rule-based Assignment Logic (Hospital Shah Alam)
     combined_text = f"{row.get(problem_col, '')} {row.get(location_col, '')} {row.get(system_col, '')}".upper()
 
     system_rules = [
@@ -140,88 +146,71 @@ def get_final_pic(row):
 
     return "UNASSIGNED"
 
-# Apply Final PIC Column
+# Apply PIC Assignment
 df['Assigned_PIC'] = df.apply(get_final_pic, axis=1)
 
-# Display Columns Selection
-target_display_cols = []
-if wi_no_col: target_display_cols.append(wi_no_col)
-if type_col: target_display_cols.append(type_col)
-if status_col: target_display_cols.append(status_col)
-if problem_col: target_display_cols.append(problem_col)
-if date_col: target_display_cols.append(date_col)
-target_display_cols.append('Assigned_PIC')
-
-display_cols = [c for c in target_display_cols if c in df.columns]
+# Build Display Column List
+target_cols = [wi_no_col, type_col, status_col, problem_col, date_col, 'Assigned_PIC']
+display_cols = [c for c in target_cols if c and c in df.columns]
 if not display_cols:
     display_cols = df.columns.tolist()
 
-# Parse Dates Safely
+# Parse Dates
 if date_col:
     df['Parsed_Date'] = pd.to_datetime(df[date_col], errors='coerce')
     df['Year'] = df['Parsed_Date'].dt.year
     df['Month_Name'] = df['Parsed_Date'].dt.strftime('%B')
-else:
-    df['Year'] = None
-    df['Month_Name'] = None
 
-# COLOR MAP FOR STATUS
+# Status Colors
 COLOR_MAP = {
-    "Open": "#E53E3E", "OPEN": "#E53E3E", "open": "#E53E3E",
-    "In Progress": "#DD6B20", "IN PROGRESS": "#DD6B20", "in progress": "#DD6B20",
+    "Open": "#E53E3E", "OPEN": "#E53E3E",
+    "In Progress": "#DD6B20", "IN PROGRESS": "#DD6B20",
     "Pending": "#DD6B20", "PENDING": "#DD6B20",
-    "Closed": "#3182CE", "CLOSED": "#3182CE", "closed": "#3182CE",
-    "Completed": "#3182CE", "COMPLETED": "#3182CE", "completed": "#3182CE",
+    "Closed": "#3182CE", "CLOSED": "#3182CE",
+    "Completed": "#3182CE", "COMPLETED": "#3182CE",
     "Done": "#3182CE", "DONE": "#3182CE"
 }
 
-# --- SIDEBAR NAVIGATION AND FILTERS ---
-st.sidebar.header("Navigation & Controls")
+# --- SIDEBAR & FILTERS ---
+st.sidebar.header("Controls & Filters")
 
-if st.sidebar.button("🔄 Refresh Data"):
+if st.sidebar.button("🔄 Refresh Master Data"):
     st.cache_data.clear()
     st.rerun()
 
-page = st.sidebar.radio("Go to:", [
-    "Main Overview (All Work Types)", 
+page = st.sidebar.radio("View Page:", [
+    "Main Overview (Master Data)", 
     "PPM & PIC KPIs", 
-    "🔍 PIC Roster Directory"
+    "📋 Duty Roster Directory"
 ])
 
 st.sidebar.markdown("---")
-st.sidebar.subheader("📅 Date Filters")
 
 if date_col and 'Year' in df.columns and not df['Year'].dropna().empty:
-    available_years = sorted(df['Year'].dropna().astype(int).unique().tolist(), reverse=True)
-    selected_year = st.sidebar.selectbox("Select Year:", ["All Years"] + [str(y) for y in available_years])
+    years = sorted(df['Year'].dropna().astype(int).unique().tolist(), reverse=True)
+    selected_year = st.sidebar.selectbox("Filter Year:", ["All Years"] + [str(y) for y in years])
     if selected_year != "All Years":
         df = df[df['Year'] == int(selected_year)]
 
 if date_col and 'Month_Name' in df.columns and not df['Month_Name'].dropna().empty:
     month_order = ["January", "February", "March", "April", "May", "June", 
                    "July", "August", "September", "October", "November", "December"]
-    present_months = df['Month_Name'].dropna().unique().tolist()
-    sorted_months = [m for m in month_order if m in present_months]
-    
-    selected_month = st.sidebar.selectbox("Select Month:", ["All Months"] + sorted_months)
+    present_months = [m for m in month_order if m in df['Month_Name'].dropna().unique()]
+    selected_month = st.sidebar.selectbox("Filter Month:", ["All Months"] + present_months)
     if selected_month != "All Months":
         df = df[df['Month_Name'] == selected_month]
 
-st.sidebar.markdown("---")
-st.sidebar.subheader("🔍 Keyword Search")
-
 if problem_col:
-    problem_keyword = st.sidebar.text_input("Filter Description:", placeholder="e.g. leak, gas, aircon")
-    if problem_keyword.strip():
-        df = df[df[problem_col].astype(str).str.contains(problem_keyword, case=False, na=False)]
+    search_keyword = st.sidebar.text_input("Search Description:", placeholder="e.g., leak, chiller, gas")
+    if search_keyword.strip():
+        df = df[df[problem_col].astype(str).str.contains(search_keyword, case=False, na=False)]
 
 # Categorize Work Types
 if type_col:
-    work_type_clean = df[type_col].astype(str).str.upper().str.strip()
-    
-    ppm_mask = work_type_clean.str.contains(r'PPM|\bPM\b|PREVENT|PEVENT|SCHEDULED|PLANNED', regex=True)
-    breakdown_mask = work_type_clean.str.contains(r'BREAKDOWN|\bBD\b|EMERGENCY|UNPLANNED', regex=True)
-    cm_mask = work_type_clean.str.contains(r'\bCM\b|CORRECTIVE|REPAIR', regex=True) & (~ppm_mask) & (~breakdown_mask)
+    type_clean = df[type_col].astype(str).str.upper().str.strip()
+    ppm_mask = type_clean.str.contains(r'PPM|\bPM\b|PREVENT|PLANNED', regex=True)
+    breakdown_mask = type_clean.str.contains(r'BREAKDOWN|\bBD\b|EMERGENCY', regex=True)
+    cm_mask = type_clean.str.contains(r'\bCM\b|CORRECTIVE|REPAIR', regex=True) & (~ppm_mask) & (~breakdown_mask)
     
     ppm_data = df[ppm_mask]
     breakdown_data = df[breakdown_mask]
@@ -229,8 +218,8 @@ if type_col:
 else:
     ppm_data, breakdown_data, cm_data = pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
 
-# EXCEL EXPORT HELPER
-def render_excel_download_button(df_in, filename="Export_Data.xlsx", label="📥 Download Excel"):
+# Excel Export Function
+def download_excel(df_in, filename, label="📥 Download Excel"):
     if df_in.empty:
         return
     buffer = io.BytesIO()
@@ -244,86 +233,78 @@ def render_excel_download_button(df_in, filename="Export_Data.xlsx", label="📥
     )
 
 # --- PAGE 1: MAIN OVERVIEW ---
-if page == "Main Overview (All Work Types)":
-    st.subheader("Global Mechanical Maintenance Overview")
+if page == "Main Overview (Master Data)":
+    st.subheader("Master Data Facility Overview")
     
     active_count = 0
     if status_col:
         active_count = len(df[~df[status_col].astype(str).str.upper().str.strip().isin(['CLOSED', 'COMPLETED', 'DONE'])])
         
-    col1, col2, col3, col4 = st.columns(4)
-    col1.metric("Total Active WIs", active_count)
-    col2.metric("PPM WIs", len(ppm_data))
-    col3.metric("Breakdown WIs", len(breakdown_data))
-    col4.metric("Corrective (CM) WIs", len(cm_data))
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric("Total WIs", len(df))
+    m2.metric("Active / Open WIs", active_count)
+    m3.metric("PPM WIs", len(ppm_data))
+    m4.metric("Breakdown / CM WIs", len(breakdown_data) + len(cm_data))
     
     st.markdown("---")
-    st.write("### Work Orders by Category")
-    tab1, tab2, tab3, tab4 = st.tabs(["PPM (Preventive)", "Breakdown", "CM (Corrective)", "All Raw Data"])
+    tab1, tab2, tab3, tab4 = st.tabs(["All Master Data", "PPM Data", "Breakdown Data", "Corrective (CM) Data"])
     
     with tab1:
-        st.dataframe(ppm_data[display_cols] if not ppm_data.empty else ppm_data, use_container_width=True)
-        render_excel_download_button(ppm_data, "PPM_Work_Orders.xlsx", "📥 Export PPM Data")
-    with tab2:
-        st.dataframe(breakdown_data[display_cols] if not breakdown_data.empty else breakdown_data, use_container_width=True)
-        render_excel_download_button(breakdown_data, "Breakdown_Work_Orders.xlsx", "📥 Export Breakdown Data")
-    with tab3:
-        st.dataframe(cm_data[display_cols] if not cm_data.empty else cm_data, use_container_width=True)
-        render_excel_download_button(cm_data, "CM_Work_Orders.xlsx", "📥 Export CM Data")
-    with tab4:
         st.dataframe(df[display_cols] if not df.empty else df, use_container_width=True)
-        render_excel_download_button(df, "All_Maintenance_Data.xlsx", "📥 Export Master Data")
+        download_excel(df, "Master_Data.xlsx", "📥 Export Master Data")
+    with tab2:
+        st.dataframe(ppm_data[display_cols] if not ppm_data.empty else ppm_data, use_container_width=True)
+        download_excel(ppm_data, "PPM_Data.xlsx", "📥 Export PPM Data")
+    with tab3:
+        st.dataframe(breakdown_data[display_cols] if not breakdown_data.empty else breakdown_data, use_container_width=True)
+        download_excel(breakdown_data, "Breakdown_Data.xlsx", "📥 Export Breakdown Data")
+    with tab4:
+        st.dataframe(cm_data[display_cols] if not cm_data.empty else cm_data, use_container_width=True)
+        download_excel(cm_data, "CM_Data.xlsx", "📥 Export CM Data")
 
 # --- PAGE 2: PPM & PIC KPIS ---
 elif page == "PPM & PIC KPIs":
-    st.subheader("PPM Tracking & Mechanical PIC Performance")
+    st.subheader("PIC Performance & PPM KPIs")
     
-    st.sidebar.markdown("---")
-    st.sidebar.subheader("👤 PIC Filters")
+    unique_pics = sorted([p for p in df['Assigned_PIC'].dropna().unique() if p != "UNASSIGNED"])
+    selected_pic = st.selectbox("Select PIC:", ["All PICs"] + unique_pics)
     
-    unique_pics = sorted([p for p in df['Assigned_PIC'].dropna().unique().tolist() if p != "UNASSIGNED"])
+    pic_df = df if selected_pic == "All PICs" else df[df['Assigned_PIC'] == selected_pic]
     
-    selected_pic = st.sidebar.selectbox("Filter by PIC:", ["All PICs"] + unique_pics)
-    
-    filtered_ppm = ppm_data
-    if selected_pic != "All PICs":
-        filtered_ppm = filtered_ppm[filtered_ppm['Assigned_PIC'].astype(str).str.contains(selected_pic, case=False, na=False)]
+    total_wis = len(pic_df)
+    closed_wis = 0
+    if status_col and not pic_df.empty:
+        closed_wis = len(pic_df[pic_df[status_col].astype(str).str.upper().str.strip().isin(['CLOSED', 'COMPLETED', 'DONE'])])
         
-    total_ppm = len(filtered_ppm)
-    closed_ppm = 0
-    if status_col and not filtered_ppm.empty:
-        closed_ppm = len(filtered_ppm[filtered_ppm[status_col].astype(str).str.upper().str.strip().isin(['CLOSED', 'COMPLETED', 'DONE'])])
-        
-    kpi_percentage = (closed_ppm / total_ppm * 100) if total_ppm > 0 else 0
+    kpi_pct = (closed_wis / total_wis * 100) if total_wis > 0 else 0
     
-    kpi_col1, kpi_col2, kpi_col3 = st.columns(3)
-    kpi_col1.metric(f"Total PPM WIs ({selected_pic})", total_ppm)
-    kpi_col2.metric("Completed / Closed", closed_ppm)
-    kpi_col3.metric("Completion KPI %", f"{kpi_percentage:.1f}%")
+    c1, c2, c3 = st.columns(3)
+    c1.metric(f"Total Work Instructions ({selected_pic})", total_wis)
+    c2.metric("Closed / Completed", closed_wis)
+    c3.metric("Completion KPI", f"{kpi_pct:.1f}%")
     
-    if total_ppm > 0 and status_col:
+    if total_wis > 0 and status_col:
         fig = px.pie(
-            filtered_ppm,
+            pic_df,
             names=status_col,
             color=status_col,
             color_discrete_map=COLOR_MAP,
-            title=f"PPM Status Distribution ({selected_pic})",
+            title=f"Work Order Status Breakdown ({selected_pic})",
             hole=0.4
         )
         st.plotly_chart(fig, use_container_width=True)
-    
-    st.write(f"### Current Work Instructions for {selected_pic}")
-    st.dataframe(filtered_ppm[display_cols] if not filtered_ppm.empty else filtered_ppm, use_container_width=True)
-    render_excel_download_button(filtered_ppm, f"PPM_KPI_{selected_pic}.xlsx", f"📥 Export {selected_pic} PPM Data")
+        
+    st.dataframe(pic_df[display_cols] if not pic_df.empty else pic_df, use_container_width=True)
+    download_excel(pic_df, f"KPI_{selected_pic}.xlsx", f"📥 Export {selected_pic} Data")
 
 # --- PAGE 3: DUTY ROSTER DIRECTORY ---
-elif page == "🔍 PIC Roster Directory":
-    st.subheader("📋 Hospital Shah Alam - Mechanical Team Official Duty Directory")
+elif page == "📋 Duty Roster Directory":
+    st.subheader("📋 Hospital Shah Alam - Mechanical Duty Roster Directory")
     
     roster_data = [
         {"Category": "Main Block Level", "Scope / Floor Level": "Level 1 / Aras 1 / L1 (Include Aras G, Lobby)", "PIC In-Charge": "AMIR & SHARY"},
         {"Category": "Main Block Level", "Scope / Floor Level": "Level 2 / Aras 2 / L2 (Penyelidikan)", "PIC In-Charge": "FAIZUL"},
-        {"Category": "Main Block Level", "Scope / Floor Level": "Level 3 / Aras 3 / L3 (Emergency, Radiologi, MOW, MDW, Wad 3 - All L3)", "PIC In-Charge": "IMRAN"},
+        {"Category": "Main Block Level", "Scope / Floor Level": "Level 3 / Aras 3 / L3 (Emergency, Radiologi, MOW, MDW, Wad 3)", "PIC In-Charge": "IMRAN"},
         {"Category": "Main Block Level", "Scope / Floor Level": "Level 4 / Aras 4 / L4 (MOT, PAC, NICU, CCU, Anaesthesia)", "PIC In-Charge": "MASLIZA"},
         {"Category": "Main Block Level", "Scope / Floor Level": "Level 5 / Aras 5 / L5 (ICU, Daycare, Rawatan Harian)", "PIC In-Charge": "SHAKIR"},
         {"Category": "Main Block Level", "Scope / Floor Level": "Level 6 / Aras 6 / L6 (HDW, Dewan Bedah GOT)", "PIC In-Charge": "FARHAN"},
@@ -350,9 +331,12 @@ elif page == "🔍 PIC Roster Directory":
     ]
     
     roster_df = pd.DataFrame(roster_data)
-    search_term = st.text_input("🔍 Search PIC Scope:")
-    if search_term.strip():
-        roster_df = roster_df[roster_df['Scope / Floor Level'].str.contains(search_term, case=False, na=False)]
+    roster_search = st.text_input("🔍 Search Roster Scope/PIC:")
+    if roster_search.strip():
+        roster_df = roster_df[
+            roster_df['Scope / Floor Level'].str.contains(roster_search, case=False, na=False) |
+            roster_df['PIC In-Charge'].str.contains(roster_search, case=False, na=False)
+        ]
         
     st.dataframe(roster_df, use_container_width=True)
-    render_excel_download_button(roster_df, "Hospital_Shah_Alam_PIC_Roster.xlsx", "📥 Download PIC Roster as Excel")
+    download_excel(roster_df, "Hospital_Shah_Alam_PIC_Roster.xlsx", "📥 Download Duty Roster")
